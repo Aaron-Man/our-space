@@ -56,14 +56,19 @@ export default function OrdersPage() {
 
   return (
     <div className="page-container">
-      <h1 className="section-title">📋 点菜记录</h1>
+      <div className="mb-6">
+        <h1 className="section-title mb-0">
+          <span className="text-gradient">📋 点菜记录</span>
+        </h1>
+        <p className="text-text-light text-sm mt-1">看看今天吃什么</p>
+      </div>
 
       {/* Status Filter */}
       <div className="flex flex-wrap gap-2 mb-8">
         <button
           onClick={() => setFilter('')}
           className={`px-4 py-2 rounded-full text-sm transition-all duration-300 ${
-            !filter ? 'bg-primary-100 text-primary-dark border border-primary/30' : 'bg-surface-warm text-text-muted hover:bg-primary-50'
+            !filter ? 'bg-gradient-to-r from-primary to-primary-dark text-white shadow-sm' : 'bg-white/50 text-text-muted hover:bg-primary/10 border border-white/50'
           }`}
         >
           全部 ({statusCounts.all})
@@ -73,7 +78,7 @@ export default function OrdersPage() {
             key={key}
             onClick={() => setFilter(key)}
             className={`px-4 py-2 rounded-full text-sm transition-all duration-300 ${
-              filter === key ? 'bg-primary-100 text-primary-dark border border-primary/30' : 'bg-surface-warm text-text-muted hover:bg-primary-50'
+              filter === key ? 'bg-gradient-to-r from-primary to-primary-dark text-white shadow-sm' : 'bg-white/50 text-text-muted hover:bg-primary/10 border border-white/50'
             }`}
           >
             {val.label} ({statusCounts[key as keyof typeof statusCounts] || 0})
@@ -87,9 +92,11 @@ export default function OrdersPage() {
           <p className="text-text-muted">加载中...</p>
         </div>
       ) : filteredOrders.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-4xl mb-4">📋</p>
-          <p className="text-text-muted">
+        <div className="text-center py-16">
+          <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+            <span className="text-4xl">📋</span>
+          </div>
+          <p className="text-text-muted font-medium">
             {filter ? '该状态暂无订单' : '还没有订单，去菜谱页面点一道菜吧！'}
           </p>
         </div>
@@ -99,10 +106,10 @@ export default function OrdersPage() {
             const statusInfo = ORDER_STATUS_MAP[order.status];
             const nextStatus = getNextStatus(order.status);
             return (
-              <div key={order.id} className="card animate-fade-in">
+              <div key={order.id} className="card animate-fade-in group">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-2">
                       <h3 className="text-lg font-display font-semibold text-text-main">
                         {order.dish?.name || '未知菜品'}
                       </h3>
@@ -111,9 +118,12 @@ export default function OrdersPage() {
                       </span>
                     </div>
                     {order.note && (
-                      <p className="text-text-muted text-sm mb-1">备注：{order.note}</p>
+                      <p className="text-text-muted text-sm mb-1 flex items-center gap-1">
+                        <span>📝</span> {order.note}
+                      </p>
                     )}
-                    <p className="text-text-light text-xs">
+                    <p className="text-text-light text-xs flex items-center gap-1">
+                      <span>🕐</span>
                       {new Date(order.created_at).toLocaleString('zh-CN')}
                     </p>
                   </div>
@@ -128,9 +138,11 @@ export default function OrdersPage() {
                     )}
                     <button
                       onClick={() => handleDelete(order.id)}
-                      className="text-text-light hover:text-danger text-sm transition-colors"
+                      className="text-text-light hover:text-danger text-sm transition-colors opacity-0 group-hover:opacity-100"
                     >
-                      删除
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
                     </button>
                   </div>
                 </div>

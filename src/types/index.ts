@@ -88,9 +88,23 @@ export interface Photo {
   user_id: string;
   image_url: string;
   caption: string | null;
+  category: string | null;
   taken_at: string | null;
   created_at: string;
 }
+
+export interface PhotoCategory {
+  id: number;
+  name: string;
+  emoji: string;
+  sort_order: number;
+}
+
+// 默认 emoji 供用户新建分类时选择
+export const CATEGORY_EMOJIS = [
+  '📷', '🌈', '🍜', '✈️', '🤳', '🐾', '🏔️', '📌',
+  '🎉', '🎨', '🎵', '🏠', '💕', '🌸', '🎄', '⭐',
+];
 
 export const MOOD_OPTIONS = [
   { emoji: '😊', label: '开心' },

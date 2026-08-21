@@ -92,12 +92,22 @@ create table public.memos (
   updated_at timestamptz default now()
 );
 
--- 9. 相册表
+-- 9. 相册分类表
+create table public.photo_categories (
+  id bigserial primary key,
+  name text not null unique,
+  emoji text default '📷',
+  sort_order int default 0,
+  created_at timestamptz default now()
+);
+
+-- 10. 相册表
 create table public.photos (
   id bigserial primary key,
   user_id uuid references public.profiles(id) on delete cascade not null,
   image_url text not null,
   caption text,
+  category text,
   taken_at timestamptz,
   created_at timestamptz default now()
 );
@@ -115,6 +125,7 @@ alter table public.orders enable row level security;
 alter table public.travels enable row level security;
 alter table public.memos enable row level security;
 alter table public.photos enable row level security;
+alter table public.photo_categories enable row level security;
 
 -- profiles: 所有人可读，本人可写
 create policy "profiles select" on public.profiles for select using (true);
@@ -135,6 +146,8 @@ create policy "journals delete" on public.journals for delete using (auth.uid() 
 -- categories: 所有人可读可写（共享）
 create policy "categories select" on public.categories for select using (true);
 create policy "categories insert" on public.categories for insert with check (true);
+create policy "categories update" on public.categories for update using (true);
+create policy "categories delete" on public.categories for delete using (true);
 
 -- dishes
 create policy "dishes select" on public.dishes for select using (true);
@@ -163,7 +176,14 @@ create policy "memos delete" on public.memos for delete using (auth.uid() = user
 -- photos
 create policy "photos select" on public.photos for select using (true);
 create policy "photos insert" on public.photos for insert with check (auth.uid() = user_id);
+create policy "photos update" on public.photos for update using (auth.uid() = user_id);
 create policy "photos delete" on public.photos for delete using (auth.uid() = user_id);
+
+-- photo_categories: 所有人可读可写（共享）
+create policy "photo_categories select" on public.photo_categories for select using (true);
+create policy "photo_categories insert" on public.photo_categories for insert with check (true);
+create policy "photo_categories update" on public.photo_categories for update using (true);
+create policy "photo_categories delete" on public.photo_categories for delete using (true);
 
 -- ============================================
 -- Storage Bucket 配置

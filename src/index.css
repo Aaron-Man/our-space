@@ -8,10 +8,11 @@
   }
 
   body {
-    @apply bg-surface text-text-main font-body antialiased;
-    background-image:
-      radial-gradient(ellipse at 20% 50%, rgba(122, 184, 160, 0.08) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 80%, rgba(242, 167, 179, 0.08) 0%, transparent 50%);
+    @apply font-body antialiased;
+    background-color: #faf8f5;
+    background-attachment: fixed;
+    background-size: cover;
+    transition: background 0.6s ease;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -27,7 +28,7 @@
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-surface-warm;
+    @apply bg-transparent;
   }
 
   ::-webkit-scrollbar-thumb {
@@ -37,18 +38,22 @@
 
 @layer components {
   .card {
+    @apply bg-white/70 backdrop-blur-md rounded-2xl shadow-soft p-6 transition-all duration-300 hover:shadow-medium border border-white/40;
+  }
+
+  .card-solid {
     @apply bg-surface-card rounded-2xl shadow-soft p-6 transition-all duration-300 hover:shadow-medium;
   }
 
   .btn-primary {
-    @apply px-6 py-2.5 bg-primary text-white rounded-xl font-medium
-           transition-all duration-300 hover:bg-primary-dark hover:shadow-medium
+    @apply px-6 py-2.5 bg-gradient-to-r from-primary to-primary-dark text-white rounded-xl font-medium
+           transition-all duration-300 hover:shadow-medium hover:brightness-105
            active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-accent {
-    @apply px-6 py-2.5 bg-accent text-white rounded-xl font-medium
-           transition-all duration-300 hover:bg-accent-dark hover:shadow-pink
+    @apply px-6 py-2.5 bg-gradient-to-r from-accent to-accent-dark text-white rounded-xl font-medium
+           transition-all duration-300 hover:shadow-pink hover:brightness-105
            active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
@@ -59,13 +64,13 @@
   }
 
   .btn-danger {
-    @apply px-6 py-2.5 bg-danger text-white rounded-xl font-medium
-           transition-all duration-300 hover:bg-red-600
+    @apply px-6 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-medium
+           transition-all duration-300 hover:shadow-md hover:brightness-105
            active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .input-field {
-    @apply w-full px-4 py-3 bg-surface-card border border-gray-200 rounded-xl
+    @apply w-full px-4 py-3 bg-white/60 backdrop-blur-sm border border-white/50 rounded-xl
            text-text-main placeholder-text-light font-body
            focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20
            transition-all duration-300;
@@ -102,6 +107,45 @@
   .badge-danger {
     @apply badge bg-red-100 text-red-700;
   }
+
+  /* Modal overlay */
+  .modal-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center p-4;
+  }
+
+  .modal-backdrop {
+    @apply absolute inset-0 bg-black/40 backdrop-blur-sm;
+  }
+
+  .modal-content {
+    @apply relative bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl max-w-lg w-full
+           border border-white/50 overflow-hidden;
+  }
+
+  .modal-header {
+    @apply px-6 pt-6 pb-4 border-b border-gray-100/50;
+  }
+
+  .modal-body {
+    @apply px-6 py-5;
+  }
+
+  .modal-footer {
+    @apply px-6 pb-6 pt-2;
+  }
+
+  /* Form section styles */
+  .form-section {
+    @apply mb-5;
+  }
+
+  .form-label {
+    @apply block text-sm font-semibold text-text-main mb-2;
+  }
+
+  .form-hint {
+    @apply text-xs text-text-light mt-1;
+  }
 }
 
 @layer utilities {
@@ -109,8 +153,24 @@
     @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent;
   }
 
+  .text-gradient-warm {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-orange-400 to-pink-500;
+  }
+
+  .text-gradient-cool {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500;
+  }
+
   .animate-float {
     animation: float 6s ease-in-out infinite;
+  }
+
+  .glass {
+    @apply bg-white/20 backdrop-blur-md border border-white/30;
+  }
+
+  .glass-strong {
+    @apply bg-white/50 backdrop-blur-lg border border-white/40;
   }
 }
 
