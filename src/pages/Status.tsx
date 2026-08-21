@@ -3,6 +3,15 @@ import { supabase } from '../lib/supabase';
 import type { Status } from '../types';
 import { MOOD_OPTIONS } from '../types';
 
+/** 确保返回可用的图片 URL：已经是 http 则直接用，否则转为公开 URL */
+function resolveImageUrl(imageUrlOrPath: string): string {
+  if (imageUrlOrPath.startsWith('http')) {
+    return imageUrlOrPath;
+  }
+  const { data } = supabase.storage.from('images').getPublicUrl(imageUrlOrPath);
+  return data.publicUrl;
+}
+
 export default function StatusPage() {
   const [statuses, setStatuses] = useState<Status[]>([]);
   const [loading, setLoading] = useState(true);
@@ -12,7 +21,9 @@ export default function StatusPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imageUrls, setImageUrls] = useState<Record<number, string>>({});
 
   const fetchStatuses = async () => {
     try {
@@ -20,7 +31,18 @@ export default function StatusPage() {
         .from('statuses')
         .select('*')
         .order('created_at', { ascending: false });
-      if (data) setStatuses(data as Status[]);
+      if (data) {
+        const list = data as Status[];
+        setStatuses(list);
+        // 解析图片 URL（数据库已存完整 URL 则直接用，否则转为公开 URL）
+        const urls: Record<number, string> = {};
+        for (const s of list) {
+          if (s.image_url) {
+            urls[s.id] = resolveImageUrl(s.image_url);
+          }
+        }
+        setImageUrls(urls);
+      }
     } catch { /* ignore */ }
     finally { setLoading(false); }
   };
@@ -39,31 +61,49 @@ export default function StatusPage() {
     e.preventDefault();
     if (!content.trim()) return;
     setSubmitting(true);
+    setError('');
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setError('请先登录');
+        return;
+      }
 
       let imageUrl: string | null = null;
 
       if (imageFile) {
         const ext = imageFile.name.split('.').pop();
         const path = `${user.id}/${Date.now()}.${ext}`;
-        const { data: uploadData } = await supabase.storage
+        console.log('[Status] 开始上传图片:', { path, fileSize: imageFile.size, type: imageFile.type });
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
           .from('images')
           .upload(path, imageFile);
+        console.log('[Status] 上传结果:', { uploadData, uploadError });
+
+        if (uploadError) {
+          setError(`图片上传失败: ${uploadError.message}`);
+          return;
+        }
+
         if (uploadData) {
-          const { data: urlData } = supabase.storage.from('images').getPublicUrl(path);
-          imageUrl = urlData.publicUrl;
+          // 直接存储 path，不再存储 public URL
+          imageUrl = path;
         }
       }
 
-      await supabase.from('statuses').insert({
+      const { error: insertError } = await supabase.from('statuses').insert({
         user_id: user.id,
         content: content.trim(),
         mood: mood || null,
         image_url: imageUrl,
       });
+
+      if (insertError) {
+        setError(`发布失败: ${insertError.message}`);
+        return;
+      }
 
       setContent('');
       setMood('');
@@ -71,8 +111,10 @@ export default function StatusPage() {
       setImagePreview('');
       setShowForm(false);
       fetchStatuses();
-    } catch { /* ignore */ }
-    finally { setSubmitting(false); }
+    } catch (err) {
+      console.error('[Status] 发布异常:', err);
+      setError(`发布异常: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally { setSubmitting(false); }
   };
 
   const handleDelete = async (id: number) => {
@@ -150,6 +192,11 @@ export default function StatusPage() {
             ))}
           </div>
 
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
+              {error}
+            </div>
+          )}
           <button type="submit" disabled={submitting || !content.trim()} className="btn-primary">
             {submitting ? '发布中...' : '发布'}
           </button>
@@ -180,11 +227,12 @@ export default function StatusPage() {
                       <span className="text-xs text-accent mb-1 inline-block">{s.mood}</span>
                     )}
                     <p className="text-text-main">{s.content}</p>
-                    {s.image_url && (
+                    {s.image_url && imageUrls[s.id] && (
                       <img
-                        src={s.image_url}
+                        src={imageUrls[s.id]}
                         alt=""
                         className="mt-3 max-w-xs rounded-xl shadow-soft"
+                        onError={() => console.error('[Status] 图片加载失败:', imageUrls[s.id])}
                       />
                     )}
                     <p className="text-text-light text-sm mt-2">

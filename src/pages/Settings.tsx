@@ -10,7 +10,18 @@ export default function SettingsPage() {
   const [anniversaryDate, setAnniversaryDate] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [avatarError, setAvatarError] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /** 从存储的 URL 或路径中提取 storage path */
+  const extractStoragePath = (imageUrlOrPath: string): string => {
+    if (imageUrlOrPath.startsWith('http')) {
+      const match = imageUrlOrPath.match(/\/storage\/v1\/object\/(?:public|signed)\/images\/(.+)/);
+      return match ? match[1] : imageUrlOrPath;
+    }
+    return imageUrlOrPath;
+  };
 
   useEffect(() => {
     fetchProfile();
@@ -33,6 +44,14 @@ export default function SettingsPage() {
         setDisplayName(p.display_name || '');
         setCoupleName(p.couple_name || '');
         setAnniversaryDate(p.anniversary_date || '');
+        // 生成头像 signed URL
+        if (p.avatar_url) {
+          const path = extractStoragePath(p.avatar_url);
+          const { data: urlData } = await supabase.storage
+            .from('images')
+            .createSignedUrl(path, 3600);
+          if (urlData?.signedUrl) setAvatarUrl(urlData.signedUrl);
+        }
       }
     } catch { /* ignore */ }
     finally { setLoading(false); }
@@ -41,15 +60,31 @@ export default function SettingsPage() {
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !profile) return;
+    setAvatarError('');
 
     const ext = file.name.split('.').pop();
     const path = `avatars/${profile.id}/${Date.now()}.${ext}`;
-    const { data: uploadData } = await supabase.storage.from('images').upload(path, file);
+    console.log('[Settings] 开始上传头像:', { path, fileSize: file.size, type: file.type });
+
+    const { data: uploadData, error: uploadError } = await supabase.storage.from('images').upload(path, file);
+    console.log('[Settings] 上传结果:', { uploadData, uploadError });
+
+    if (uploadError) {
+      setAvatarError(`头像上传失败: ${uploadError.message}`);
+      return;
+    }
 
     if (uploadData) {
-      const { data: urlData } = supabase.storage.from('images').getPublicUrl(path);
-      await supabase.from('profiles').update({ avatar_url: urlData.publicUrl }).eq('id', profile.id);
-      setProfile({ ...profile, avatar_url: urlData.publicUrl });
+      // 存储 path 而不是 public URL
+      const { error: updateError } = await supabase.from('profiles').update({ avatar_url: path }).eq('id', profile.id);
+      if (updateError) {
+        setAvatarError(`保存头像失败: ${updateError.message}`);
+        return;
+      }
+      // 生成 signed URL 用于显示
+      const { data: urlData } = await supabase.storage.from('images').createSignedUrl(path, 3600);
+      if (urlData?.signedUrl) setAvatarUrl(urlData.signedUrl);
+      setProfile({ ...profile, avatar_url: path });
     }
   };
 
@@ -105,8 +140,8 @@ export default function SettingsPage() {
           <h3 className="text-lg font-display font-semibold text-text-main mb-4">头像</h3>
           <div className="flex items-center gap-4">
             <div className="w-20 h-20 rounded-full bg-primary-100 flex items-center justify-center overflow-hidden">
-              {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt="头像" className="w-full h-full object-cover" />
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="头像" className="w-full h-full object-cover" />
               ) : (
                 <span className="text-3xl">👤</span>
               )}
@@ -119,6 +154,7 @@ export default function SettingsPage() {
                 更换头像
               </button>
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
+              {avatarError && <p className="text-red-500 text-xs mt-1">{avatarError}</p>}
               <p className="text-text-light text-xs mt-1">支持 JPG、PNG 格式</p>
             </div>
           </div>

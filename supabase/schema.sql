@@ -166,16 +166,15 @@ create policy "photos insert" on public.photos for insert with check (auth.uid()
 create policy "photos delete" on public.photos for delete using (auth.uid() = user_id);
 
 -- ============================================
--- Storage Bucket (在 Supabase Dashboard 创建)
+-- Storage Bucket 配置
 -- ============================================
--- 在 Supabase Dashboard > Storage 中创建名为 "images" 的 public bucket
--- 或者执行以下 SQL:
 
+-- 创建名为 "images" 的 public bucket
 insert into storage.buckets (id, name, public)
 values ('images', 'images', true)
 on conflict (id) do nothing;
 
--- Storage policies
-create policy "images select" on storage.objects for select using (bucket_id = 'images');
-create policy "images insert" on storage.objects for insert with check (bucket_id = 'images');
-create policy "images delete" on storage.objects for delete using (bucket_id = 'images');
+-- Storage policies for images bucket
+create policy "images select" on storage.objects for select to public using (bucket_id = 'images');
+create policy "images insert" on storage.objects for insert to authenticated with check (bucket_id = 'images');
+create policy "images delete" on storage.objects for delete to authenticated using (bucket_id = 'images');

@@ -2,6 +2,15 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import type { Photo } from '../types';
 
+/** 确保返回可用的图片 URL：已经是 http 则直接用，否则转为公开 URL */
+function resolveImageUrl(imageUrlOrPath: string): string {
+  if (imageUrlOrPath.startsWith('http')) {
+    return imageUrlOrPath;
+  }
+  const { data } = supabase.storage.from('images').getPublicUrl(imageUrlOrPath);
+  return data.publicUrl;
+}
+
 export default function GalleryPage() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -11,16 +20,33 @@ export default function GalleryPage() {
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [error, setError] = useState('');
+  const [imageUrls, setImageUrls] = useState<Record<number, string>>({});
 
   const fetchPhotos = async () => {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('photos')
         .select('*')
         .order('created_at', { ascending: false });
-      if (data) setPhotos(data as Photo[]);
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
+      console.log('[Gallery] 获取照片列表:', { data, error });
+      if (data) {
+        const photoList = data as Photo[];
+        setPhotos(photoList);
+        // 解析图片 URL（数据库已存完整 URL 则直接用，否则转为公开 URL）
+        const urls: Record<number, string> = {};
+        for (const photo of photoList) {
+          const url = resolveImageUrl(photo.image_url);
+          urls[photo.id] = url;
+          console.log(`[Gallery] 照片 id=${photo.id}, image_url=${photo.image_url}, resolvedUrl=${url}`);
+        }
+        console.log('[Gallery] imageUrls map:', urls);
+        setImageUrls(urls);
+      }
+      if (error) console.error('[Gallery] 获取照片失败:', error);
+    } catch (err) {
+      console.error('[Gallery] 获取照片异常:', err);
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { fetchPhotos(); }, []);
@@ -36,31 +62,59 @@ export default function GalleryPage() {
     const file = fileInputRef.current?.files?.[0];
     if (!file) return;
     setUploading(true);
+    setError('');
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setError('请先登录');
+        return;
+      }
+
+      // 确保 profiles 中存在记录，避免外键约束失败
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (!existingProfile) {
+        await supabase.from('profiles').insert({ id: user.id });
+      }
 
       const ext = file.name.split('.').pop();
       const path = `photos/${user.id}/${Date.now()}.${ext}`;
-      const { data: uploadData } = await supabase.storage.from('images').upload(path, file);
+      console.log('[Gallery] 开始上传:', { path, fileSize: file.size, type: file.type });
+
+      const { data: uploadData, error: uploadError } = await supabase.storage.from('images').upload(path, file);
+      console.log('[Gallery] 上传结果:', { uploadData, uploadError });
+
+      if (uploadError) {
+        setError(`上传失败: ${uploadError.message}`);
+        return;
+      }
 
       if (uploadData) {
-        const { data: urlData } = supabase.storage.from('images').getPublicUrl(path);
-
-        await supabase.from('photos').insert({
+        // 直接存储 path，不再存储 public URL
+        const { error: insertError } = await supabase.from('photos').insert({
           user_id: user.id,
-          image_url: urlData.publicUrl,
+          image_url: path,
           caption: caption.trim() || null,
         });
+
+        if (insertError) {
+          setError(`保存记录失败: ${insertError.message}`);
+          return;
+        }
 
         setCaption('');
         setPreviewUrl('');
         setShowUpload(false);
-        fetchPhotos();
+        await fetchPhotos();
       }
-    } catch { /* ignore */ }
-    finally { setUploading(false); }
+    } catch (err) {
+      console.error('[Gallery] 上传异常:', err);
+      setError(`上传异常: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally { setUploading(false); }
   };
 
   const handleDelete = async (id: number) => {
@@ -104,6 +158,11 @@ export default function GalleryPage() {
             placeholder="照片描述（可选）..."
             className="input-field mb-4"
           />
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
+              {error}
+            </div>
+          )}
           <button
             onClick={handleUpload}
             disabled={uploading || !previewUrl}
@@ -132,11 +191,18 @@ export default function GalleryPage() {
               className="relative group cursor-pointer break-inside-avoid animate-fade-in"
               onClick={() => setSelectedPhoto(photo)}
             >
-              <img
-                src={photo.image_url}
-                alt={photo.caption || ''}
-                className="w-full rounded-xl shadow-soft group-hover:shadow-medium transition-all"
-              />
+              {imageUrls[photo.id] ? (
+                <img
+                  src={imageUrls[photo.id]}
+                  alt={photo.caption || ''}
+                  className="w-full rounded-xl shadow-soft group-hover:shadow-medium transition-all"
+                  onError={() => console.error('[Gallery] 图片加载失败:', imageUrls[photo.id])}
+                />
+              ) : (
+                <div className="w-full aspect-square bg-gray-100 rounded-xl flex items-center justify-center">
+                  <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-500 rounded-full animate-spin" />
+                </div>
+              )}
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all rounded-xl flex items-end">
                 <div className="p-3 w-full opacity-0 group-hover:opacity-100 transition-opacity">
                   {photo.caption && (
@@ -153,12 +219,12 @@ export default function GalleryPage() {
       )}
 
       {/* Photo Preview Modal */}
-      {selectedPhoto && (
+      {selectedPhoto && imageUrls[selectedPhoto.id] && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setSelectedPhoto(null)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative max-w-3xl w-full animate-bounce-in" onClick={(e) => e.stopPropagation()}>
             <img
-              src={selectedPhoto.image_url}
+              src={imageUrls[selectedPhoto.id]}
               alt={selectedPhoto.caption || ''}
               className="w-full max-h-[80vh] object-contain rounded-2xl"
             />

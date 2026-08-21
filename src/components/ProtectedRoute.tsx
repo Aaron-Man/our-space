@@ -7,13 +7,37 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
   const [session, setSession] = useState<boolean>(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(!!session);
-      setLoading(false);
-    });
+    const ensureProfile = async (userId: string) => {
+      try {
+        const { data: existing } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', userId)
+          .maybeSingle();
+        if (!existing) {
+          await supabase.from('profiles').insert({ id: userId });
+        }
+      } catch {
+        // 忽略：可能因并发或权限导致，不影响主流程
+      }
+    };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       setSession(!!session);
+      if (session?.user) {
+        await ensureProfile(session.user.id);
+      }
+      setLoading(false);
+    };
+
+    init();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setSession(!!session);
+      if (session?.user) {
+        await ensureProfile(session.user.id);
+      }
       setLoading(false);
     });
 
