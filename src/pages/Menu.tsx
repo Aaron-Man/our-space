@@ -15,7 +15,7 @@ export default function MenuPage() {
   const [ordering, setOrdering] = useState(false);
 
   const [form, setForm] = useState({
-    name: '', description: '', category_id: 0, ingredients: '',
+    name: '', description: '', category_ids: [] as number[], ingredients: '',
     difficulty: 1, image_url: '', available: true,
   });
   const [editingDishId, setEditingDishId] = useState<number | null>(null);
@@ -32,22 +32,8 @@ export default function MenuPage() {
 
   const fetchData = async () => {
     try {
-      const [dishRes, catRes] = await Promise.all([
-        supabase.from('dishes').select('*, category:categories(*)').order('sort_order', { ascending: true }).order('created_at', { ascending: false }),
-        supabase.from('categories').select('*').order('sort_order'),
-      ]);
-      if (dishRes.data) {
-        const loadedDishes = dishRes.data as Dish[];
-        // Auto-initialize sort_order if all are 0 (after migration)
-        if (loadedDishes.length > 1 && loadedDishes.every((d) => !d.sort_order)) {
-          const updates = loadedDishes.map((d, i) =>
-            supabase.from('dishes').update({ sort_order: i }).eq('id', d.id)
-          );
-          await Promise.all(updates);
-          loadedDishes.forEach((d, i) => { d.sort_order = i; });
-        }
-        setDishes(loadedDishes);
-      }
+      // Fetch categories first
+      const catRes = await supabase.from('categories').select('*').order('sort_order');
       if (catRes.data) {
         const loadedCats = catRes.data as Category[];
         // Auto-initialize category sort_order if all are 0
@@ -60,6 +46,51 @@ export default function MenuPage() {
         }
         setCategories(loadedCats);
       }
+
+      // Fetch dishes separately to avoid join issues
+      const dishRes = await supabase.from('dishes').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: false });
+      if (dishRes.data) {
+        const loadedDishes = dishRes.data as Dish[];
+        // Auto-initialize sort_order if all are 0 (after migration)
+        if (loadedDishes.length > 1 && loadedDishes.every((d) => !d.sort_order)) {
+          const updates = loadedDishes.map((d, i) =>
+            supabase.from('dishes').update({ sort_order: i }).eq('id', d.id)
+          );
+          await Promise.all(updates);
+          loadedDishes.forEach((d, i) => { d.sort_order = i; });
+        }
+        // Try to load dish_categories for multi-category support
+        try {
+          const dcRes = await supabase.from('dish_categories').select('dish_id, category_id');
+          if (dcRes.data) {
+            // Group by dish_id
+            const dcMap = new Map<number, number[]>();
+            dcRes.data.forEach((dc) => {
+              if (!dcMap.has(dc.dish_id)) dcMap.set(dc.dish_id, []);
+              dcMap.get(dc.dish_id)!.push(dc.category_id);
+            });
+            // Attach categories to dishes
+            loadedDishes.forEach((d) => {
+              const catIds = dcMap.get(d.id) || [];
+              d.categories = catIds.map((cid) => catRes.data?.find((c) => c.id === cid)).filter(Boolean) as Category[];
+              // Keep backward compat: set category_id to first category
+              if (d.categories.length > 0) {
+                d.category_id = d.categories[0].id;
+                d.category = d.categories[0];
+              }
+            });
+          }
+        } catch {
+          // Fallback to single category
+          loadedDishes.forEach((d) => {
+            if (d.category_id) {
+              d.category = catRes.data?.find((c) => c.id === d.category_id) || null;
+              d.categories = d.category ? [d.category] : [];
+            }
+          });
+        }
+        setDishes(loadedDishes);
+      }
     } catch { /* ignore */ }
     finally { setLoading(false); }
   };
@@ -67,7 +98,7 @@ export default function MenuPage() {
   useEffect(() => { fetchData(); }, []);
 
   const filteredDishes = selectedCategory
-    ? dishes.filter((d) => d.category_id === selectedCategory)
+    ? dishes.filter((d) => d.categories?.some((c) => c.id === selectedCategory))
     : dishes;
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -120,37 +151,57 @@ export default function MenuPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.category_id) return;
+    if (!form.name.trim() || form.category_ids.length === 0) return;
     setSubmitting(true);
 
     try {
+      let dishId: number;
       if (editingDishId) {
+        // Update existing dish
         const { data } = await supabase.from('dishes').update({
           name: form.name.trim(),
           description: form.description.trim() || null,
-          category_id: form.category_id,
           ingredients: form.ingredients.trim() || null,
           difficulty: form.difficulty,
           image_url: form.image_url || null,
           available: form.available,
-        }).eq('id', editingDishId).select('*, category:categories(*)').single();
+        }).eq('id', editingDishId).select().single();
+
         if (data) {
-          setDishes(dishes.map((d) => d.id === editingDishId ? { ...d, ...data } as Dish : d));
+          dishId = editingDishId;
+          // Update dish_categories
+          await supabase.from('dish_categories').delete().eq('dish_id', dishId);
+          if (form.category_ids.length > 0) {
+            await supabase.from('dish_categories').insert(
+              form.category_ids.map((cid) => ({ dish_id: dishId, category_id: cid }))
+            );
+          }
+          // Refresh to get updated categories
+          await fetchData();
         }
       } else {
+        // Insert new dish
         const maxOrder = dishes.length > 0 ? Math.max(...dishes.map((d) => d.sort_order || 0)) : -1;
         const { data } = await supabase.from('dishes').insert({
           name: form.name.trim(),
           description: form.description.trim() || null,
-          category_id: form.category_id,
           ingredients: form.ingredients.trim() || null,
           difficulty: form.difficulty,
           image_url: form.image_url || null,
           available: form.available,
           sort_order: maxOrder + 1,
-        }).select('*, category:categories(*)').single();
+        }).select().single();
+
         if (data) {
-          setDishes([data as Dish, ...dishes]);
+          dishId = data.id;
+          // Insert dish_categories
+          if (form.category_ids.length > 0) {
+            await supabase.from('dish_categories').insert(
+              form.category_ids.map((cid) => ({ dish_id: dishId, category_id: cid }))
+            );
+          }
+          // Refresh to get updated categories
+          await fetchData();
         }
       }
       resetForm();
@@ -159,7 +210,7 @@ export default function MenuPage() {
   };
 
   const resetForm = () => {
-    setForm({ name: '', description: '', category_id: 0, ingredients: '', difficulty: 1, image_url: '', available: true });
+    setForm({ name: '', description: '', category_ids: [], ingredients: '', difficulty: 1, image_url: '', available: true });
     setEditingDishId(null);
     setImageFile(null);
     setShowForm(false);
@@ -169,7 +220,7 @@ export default function MenuPage() {
     setForm({
       name: dish.name,
       description: dish.description || '',
-      category_id: dish.category_id || 0,
+      category_ids: dish.categories?.map((c) => c.id) || [],
       ingredients: dish.ingredients || '',
       difficulty: dish.difficulty,
       image_url: dish.image_url || '',
@@ -195,16 +246,27 @@ export default function MenuPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      await supabase.from('orders').insert({
+      // Generate random order ID (8 digits)
+      const randomOrderId = Math.floor(10000000 + Math.random() * 90000000).toString();
+
+      const { data } = await supabase.from('orders').insert({
         user_id: user.id,
         dish_id: orderModal.id,
         note: orderNote.trim() || null,
         status: 'pending',
-      });
+        custom_order_id: randomOrderId,
+      }).select().single();
+
+      // Store order ID for success modal
+      if (data) {
+        sessionStorage.setItem('newOrderId', data.id.toString());
+      }
 
       setOrderModal(null);
       setOrderNote('');
-      alert('点菜成功！');
+      
+      // Navigate to orders page to show success modal
+      window.location.href = '/our-space/orders';
     } catch {
       alert('点菜失败，请重试');
     } finally {
@@ -403,7 +465,7 @@ export default function MenuPage() {
                   ) : (
                     <>
                       <span className="text-sm text-text-main flex-1">{cat.name}</span>
-                      <span className="text-text-light text-xs">{dishes.filter((d) => d.category_id === cat.id).length} 道菜</span>
+                      <span className="text-text-light text-xs">{dishes.filter((d) => d.categories?.some((c) => c.id === cat.id)).length} 道菜</span>
                       {/* Edit */}
                       <button
                         onClick={(e) => { e.stopPropagation(); setEditingCatId(cat.id); setEditCatName(cat.name); }}
@@ -471,17 +533,34 @@ export default function MenuPage() {
                 />
               </div>
               <div className="form-section mb-0">
-                <label className="form-label">📂 分类</label>
-                <select
-                  value={form.category_id}
-                  onChange={(e) => setForm({ ...form, category_id: Number(e.target.value) })}
-                  className="input-field"
-                >
-                  <option value={0}>选择分类 *</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+                <label className="form-label">📂 分类 <span className="text-text-muted font-normal">（可多选）</span></label>
+                <div className="flex flex-wrap gap-2">
+                  {categories.map((c) => {
+                    const selected = form.category_ids.includes(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          const ids = selected
+                            ? form.category_ids.filter((id) => id !== c.id)
+                            : [...form.category_ids, c.id];
+                          setForm({ ...form, category_ids: ids });
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-sm transition-all duration-300 ${
+                          selected
+                            ? 'bg-gradient-to-r from-primary to-primary-dark text-white shadow-sm'
+                            : 'bg-white/50 text-text-muted hover:bg-primary/10 hover:text-primary-dark border border-white/50'
+                        }`}
+                      >
+                        {selected && '✓ '}{c.name}
+                      </button>
+                    );
+                  })}
+                  {categories.length === 0 && (
+                    <span className="text-text-muted text-sm">请先添加分类</span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -553,7 +632,7 @@ export default function MenuPage() {
               </label>
             </div>
 
-            <button type="submit" disabled={submitting || !form.name.trim() || !form.category_id} className="btn-primary w-full py-3">
+            <button type="submit" disabled={submitting || !form.name.trim() || form.category_ids.length === 0} className="btn-primary w-full py-3">
               {submitting ? (
                 <span className="flex items-center justify-center gap-2">
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -642,8 +721,12 @@ export default function MenuPage() {
                   <h3 className="text-lg font-display font-semibold text-text-main group-hover:text-primary transition-colors">
                     {dish.name}
                   </h3>
-                  {dish.category && (
-                    <span className="badge-primary text-xs mt-1">{dish.category.name}</span>
+                  {dish.categories && dish.categories.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {dish.categories.map((c) => (
+                        <span key={c.id} className="badge-primary text-xs">{c.name}</span>
+                      ))}
+                    </div>
                   )}
                   {dish.description && (
                     <p className="text-text-muted text-sm mt-2 line-clamp-2 leading-relaxed">{dish.description}</p>
@@ -723,9 +806,13 @@ export default function MenuPage() {
             <div className="modal-body">
               <div className="p-4 bg-primary/5 rounded-2xl mb-4">
                 <p className="text-primary text-lg font-bold">{orderModal.name}</p>
-                {orderModal.category && (
+                {orderModal.categories && orderModal.categories.length > 0 ? (
                   <p className="text-text-muted text-sm mt-1">
-                    {orderModal.category.name} · 难度 {'★'.repeat(orderModal.difficulty)}
+                    {orderModal.categories.map((c) => c.name).join(' · ')} · 难度 {'★'.repeat(orderModal.difficulty)}
+                  </p>
+                ) : (
+                  <p className="text-text-muted text-sm mt-1">
+                    难度 {'★'.repeat(orderModal.difficulty)}
                   </p>
                 )}
               </div>

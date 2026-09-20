@@ -23,6 +23,7 @@ export default function StatusPage() {
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [imageUrls, setImageUrls] = useState<Record<number, string>>({});
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
 
   const fetchStatuses = async () => {
     try {
@@ -93,6 +94,8 @@ export default function StatusPage() {
       setImageFile(null);
       setImagePreview('');
       setShowForm(false);
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 2000);
       fetchStatuses();
     } catch (err) {
       setError(`发布异常: ${err instanceof Error ? err.message : '未知错误'}`);
@@ -105,6 +108,12 @@ export default function StatusPage() {
       await supabase.from('statuses').delete().eq('id', id);
       fetchStatuses();
     } catch { /* ignore */ }
+  };
+
+  // Get mood emoji from label
+  const getMoodEmoji = (moodLabel: string): string => {
+    const found = MOOD_OPTIONS.find(m => m.label === moodLabel);
+    return found ? found.emoji : '💭';
   };
 
   return (
@@ -278,6 +287,18 @@ export default function StatusPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Success Toast */}
+      {showSuccessToast && (
+        <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-50 animate-bounce-in">
+          <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+            <span className="font-medium">发布成功！</span>
+          </div>
         </div>
       )}
     </div>

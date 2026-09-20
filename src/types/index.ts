@@ -57,6 +57,7 @@ export interface Order {
   dish_id: number;
   note: string | null;
   status: 'pending' | 'cooking' | 'done' | 'cancelled';
+  custom_order_id?: string | null;
   created_at: string;
   updated_at: string;
   dish?: Dish;

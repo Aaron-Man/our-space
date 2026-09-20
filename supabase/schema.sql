@@ -71,6 +71,7 @@ create table public.orders (
   dish_id int references public.dishes(id) on delete cascade not null,
   note text,
   status text default 'pending' check (status in ('pending', 'cooking', 'done', 'cancelled')),
+  custom_order_id text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );

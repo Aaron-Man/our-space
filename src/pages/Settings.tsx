@@ -4,7 +4,7 @@ import { useTheme, THEMES } from '../lib/ThemeContext';
 import type { Profile } from '../types';
 
 export default function SettingsPage() {
-  const { currentTheme, setThemeById, customBgUrl, setCustomBg, clearCustomBg } = useTheme();
+  const { currentTheme, setThemeById, customBgUrls, addCustomBg, removeCustomBg, selectedBgIndex, setSelectedBgIndex, isRotating, setIsRotating } = useTheme();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [displayName, setDisplayName] = useState('');
@@ -16,7 +16,6 @@ export default function SettingsPage() {
   const [avatarUrl, setAvatarUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bgFileInputRef = useRef<HTMLInputElement>(null);
-  const [bgPreview, setBgPreview] = useState<string | null>(customBgUrl);
 
   const extractStoragePath = (imageUrlOrPath: string): string => {
     if (imageUrlOrPath.startsWith('http')) {
@@ -71,15 +70,21 @@ export default function SettingsPage() {
   const handleBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    
+    if (customBgUrls.length >= 9) {
+      alert('最多只能上传9张背景图');
+      return;
+    }
+    
     if (file.size > 5 * 1024 * 1024) {
       alert('图片大小不能超过 5MB');
       return;
     }
+    
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
-      setBgPreview(dataUrl);
-      setCustomBg(dataUrl);
+      addCustomBg(dataUrl);
     };
     reader.readAsDataURL(file);
   };
@@ -128,255 +133,322 @@ export default function SettingsPage() {
   return (
     <div className="page-container">
       <div className="mb-6">
-        <h1 className="section-title mb-0">
-          <span className="text-gradient">⚙️ 设置</span>
+        <h1 className="section-title mb-2">
+          <span className="text-gradient">️ 设置</span>
         </h1>
-        <p className="text-text-light text-sm mt-1">管理你的空间和偏好</p>
+        <p className="text-text-light text-sm">管理你的空间和偏好，打造专属的艺术角落</p>
       </div>
-
+  
       {/* Responsive centered layout */}
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-5xl mx-auto space-y-4">
         {/* Top row: Avatar + Anniversary side by side on desktop */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Avatar Card - spans 2 cols on desktop */}
-          <div className="card relative overflow-hidden md:col-span-2">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-accent/10 to-primary/5" />
-            <div className="relative">
-              <div className="flex flex-col sm:flex-row items-center gap-5">
-                <div className="relative group flex-shrink-0">
-                  <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary to-accent p-0.5 shadow-lg">
-                    <div className="w-full h-full rounded-2xl bg-white flex items-center justify-center overflow-hidden">
-                      {avatarUrl ? (
-                        <img src={avatarUrl} alt="头像" className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-4xl">👤</span>
-                      )}
-                    </div>
+          <div className="card relative overflow-hidden md:col-span-2 group hover:shadow-lg transition-all duration-300 bg-white/40 backdrop-blur-md border border-white/60">
+            {/* Subtle gradient accent */}
+            <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-blue-400/10 to-transparent rounded-full blur-2xl" />
+            <div className="absolute bottom-0 left-0 w-36 h-36 bg-gradient-to-tr from-purple-400/10 to-transparent rounded-full blur-2xl" />
+            
+            <div className="relative p-4 flex items-center gap-4">
+              {/* Avatar with subtle glow */}
+              <div className="relative group/avatar flex-shrink-0">
+                {/* Outer glow ring */}
+                <div className="absolute -inset-1.5 rounded-2xl bg-gradient-to-br from-blue-400/30 via-purple-400/20 to-pink-400/30 opacity-60 blur-md group-hover/avatar:opacity-90 transition-opacity duration-300" />
+                
+                {/* Main avatar container */}
+                <div className="relative w-20 h-20 rounded-xl bg-white/80 backdrop-blur-sm p-0.5 shadow-lg group-hover/avatar:scale-105 transition-transform duration-300">
+                  <div className="w-full h-full rounded-lg bg-white flex items-center justify-center overflow-hidden">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt="头像" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-3xl"></span>
+                    )}
                   </div>
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="absolute -bottom-1 -right-1 w-8 h-8 bg-gradient-to-r from-primary to-primary-dark text-white rounded-full flex items-center justify-center shadow-md hover:shadow-lg transition-all hover:scale-110"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </button>
-                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
                 </div>
-                <div className="text-center sm:text-left flex-1 min-w-0">
-                  <h3 className="text-xl font-display font-bold text-text-main mb-1 truncate">
-                    {displayName || '未设置昵称'}
-                  </h3>
-                  {coupleName && (
-                    <p className="text-accent text-sm font-medium mb-1 truncate">💕 {coupleName}</p>
-                  )}
-                  <p className="text-text-light text-xs">
-                    {avatarError || '点击相机图标更换头像'}
-                  </p>
-                </div>
+                
+                {/* Camera button */}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute -bottom-1.5 -right-1.5 w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-full flex items-center justify-center shadow-md hover:shadow-lg hover:scale-110 transition-all border-2 border-white"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
+              </div>
+              
+              {/* User info */}
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-display font-bold text-text-main mb-1.5 truncate">
+                  {displayName || '未设置昵称'}
+                </h3>
+                {coupleName && (
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-200/50 mb-1.5">
+                    <span className="text-sm"></span>
+                    <span className="text-accent text-xs font-medium">{coupleName}</span>
+                  </div>
+                )}
+                <p className="text-text-light text-xs">
+                  {avatarError || '点击相机图标更换头像'}
+                </p>
               </div>
             </div>
           </div>
-
-          {/* Anniversary Counter */}
+  
+          {/* Anniversary Counter - Compact & Elegant */}
           {anniversaryDate ? (
-            <div className="card relative overflow-hidden text-center">
-              <div className="absolute inset-0 bg-gradient-to-br from-accent/10 via-pink-50 to-accent/5" />
-              <div className="relative py-2">
-                <div className="text-2xl mb-1">💑</div>
-                <p className="text-sm font-display font-bold text-text-main mb-2">在一起</p>
-                <div className="text-5xl font-display font-bold text-gradient">
-                  {daysTogether}
+            <div className="card relative overflow-hidden text-center group hover:shadow-lg transition-all duration-300 bg-white/40 backdrop-blur-md border border-white/60">
+              {/* Subtle accent */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 bg-gradient-to-br from-pink-400/15 to-purple-400/10 rounded-full blur-2xl" />
+              
+              <div className="relative p-4">
+                {/* Heart emoji */}
+                <div className="text-2xl mb-2">💕</div>
+                
+                {/* Title */}
+                <p className="text-xs font-display font-bold text-text-main mb-2">在一起</p>
+                
+                {/* Days counter */}
+                <div className="relative inline-block mb-1.5">
+                  <div className="text-4xl font-display font-bold bg-gradient-to-br from-pink-500 to-purple-500 bg-clip-text text-transparent">
+                    {daysTogether}
+                  </div>
                 </div>
-                <p className="text-text-muted text-xs mt-1">天</p>
+                
+                {/* Unit */}
+                <p className="text-text-muted text-[10px]">天</p>
               </div>
             </div>
           ) : (
             /* Quick stats placeholder when no anniversary */
-            <div className="card relative overflow-hidden text-center">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-accent/5" />
-              <div className="relative py-2">
-                <div className="text-2xl mb-1">💕</div>
-                <p className="text-sm font-display font-bold text-text-main mb-2">我们的空间</p>
-                <p className="text-text-muted text-xs">在个人信息中设置纪念日</p>
+            <div className="card relative overflow-hidden text-center group hover:shadow-lg transition-all duration-300 bg-white/40 backdrop-blur-md border border-white/60">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 bg-gradient-to-br from-blue-400/10 to-purple-400/10 rounded-full blur-2xl" />
+              
+              <div className="relative p-4">
+                <div className="text-2xl mb-2">💖</div>
+                <p className="text-xs font-display font-bold text-text-main mb-1">我们的空间</p>
+                <p className="text-text-muted text-[10px]">在个人信息中设置纪念日</p>
               </div>
             </div>
           )}
         </div>
 
-        {/* Second row: two columns on desktop */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+        {/* Second row: Theme + Custom Background */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Theme Selector */}
-          <div className="card">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-base">
-                🎨
-              </div>
-              <div>
-                <h3 className="text-base font-display font-bold text-text-main">背景主题</h3>
-                <p className="text-text-light text-xs">选择喜欢的风格</p>
+          <div className="card group hover:shadow-lg transition-all duration-300 bg-white/40 backdrop-blur-md border border-white/60">
+            <div className="p-4 border-b border-gray-100/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-400 to-purple-400 flex items-center justify-center text-white text-sm shadow-sm">
+                  
+                </div>
+                <div>
+                  <h3 className="text-sm font-display font-bold text-text-main">背景主题</h3>
+                  <p className="text-text-light text-[10px] mt-0.5">选择喜欢的风格，共{THEMES.length}种</p>
+                </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2.5">
-              {THEMES.map((theme) => (
-                <button
-                  key={theme.id}
-                  onClick={() => setThemeById(theme.id)}
-                  className={`relative p-3 rounded-xl border-2 transition-all duration-300 text-left hover:scale-[1.02] ${
-                    currentTheme.id === theme.id && !customBgUrl
-                      ? 'border-primary shadow-md bg-primary/5'
-                      : 'border-transparent bg-white/40 hover:bg-white/60 hover:border-gray-200'
-                  }`}
-                >
-                  {currentTheme.id === theme.id && !customBgUrl && (
-                    <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-primary rounded-full flex items-center justify-center">
-                      <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                  )}
-                  <div className="text-xl mb-1">{theme.emoji}</div>
-                  <div className="font-display font-semibold text-text-main text-xs">{theme.name}</div>
-                  <div className="text-text-light text-[10px] mt-0.5 leading-tight">{theme.description}</div>
-                </button>
-              ))}
+            <div className="p-4">
+              <div className="grid grid-cols-3 gap-2.5">
+                {THEMES.map((theme) => (
+                  <button
+                    key={theme.id}
+                    onClick={() => setThemeById(theme.id)}
+                    className={`relative p-2.5 rounded-lg border-2 transition-all duration-300 text-left hover:scale-[1.02] ${
+                      currentTheme.id === theme.id
+                        ? 'border-blue-400 shadow-md bg-blue-50/50'
+                        : 'border-transparent bg-white/30 hover:bg-white/50 hover:border-gray-200/50'
+                    }`}
+                  >
+                    {currentTheme.id === theme.id && (
+                      <div className="absolute top-1 right-1 w-3.5 h-3.5 bg-blue-400 rounded-full flex items-center justify-center shadow-sm">
+                        <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                    <div className="text-xl mb-1.5">{theme.emoji}</div>
+                    <div className="font-display font-semibold text-text-main text-[10px] leading-tight mb-0.5">{theme.name}</div>
+                    <div className="text-text-light text-[9px] leading-tight line-clamp-1">{theme.description}</div>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
           {/* Custom Background Upload */}
-          <div className="card">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-400 to-cyan-400 flex items-center justify-center text-white text-base">
-                🖼️
-              </div>
-              <div>
-                <h3 className="text-base font-display font-bold text-text-main">自定义背景</h3>
-                <p className="text-text-light text-xs">上传你喜欢的背景图</p>
-              </div>
-            </div>
-
-            {bgPreview ? (
-              <div className="relative group mb-3">
-                <img
-                  src={bgPreview}
-                  alt="自定义背景"
-                  className="w-full h-36 object-cover rounded-xl shadow-soft"
-                />
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all rounded-xl flex items-center justify-center gap-2">
-                  <button
-                    onClick={() => bgFileInputRef.current?.click()}
-                    className="px-3 py-1.5 bg-white/80 backdrop-blur-sm rounded-lg text-text-main text-xs font-medium hover:bg-white transition-all"
-                  >
-                    更换
-                  </button>
-                  <button
-                    onClick={() => { setBgPreview(null); clearCustomBg(); }}
-                    className="px-3 py-1.5 bg-red-500/80 backdrop-blur-sm text-white rounded-lg text-xs font-medium hover:bg-red-500 transition-all"
-                  >
-                    移除
-                  </button>
+          <div className="card group hover:shadow-lg transition-all duration-300 bg-white/40 backdrop-blur-md border border-white/60">
+            <div className="p-4 border-b border-gray-100/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-400 to-blue-400 flex items-center justify-center text-white text-sm shadow-sm">
+                  ️
+                </div>
+                <div>
+                  <h3 className="text-sm font-display font-bold text-text-main">自定义背景</h3>
+                  <p className="text-text-light text-[10px] mt-0.5">上传多张背景图，可轮换播放</p>
                 </div>
               </div>
-            ) : (
+            </div>
+            <div className="p-4">
+              {/* Rotation toggle */}
+              {customBgUrls.length > 1 && (
+                <div className="mb-3 p-2.5 bg-blue-50/50 rounded-lg border border-blue-200/50">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isRotating}
+                      onChange={(e) => setIsRotating(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded text-blue-500 focus:ring-blue-500"
+                    />
+                    <span className="text-xs font-medium text-text-main">🔄 轮换播放（每30秒）</span>
+                  </label>
+                </div>
+              )}
+
+              {/* Upload button */}
               <div
                 onClick={() => bgFileInputRef.current?.click()}
-                className="w-full h-36 border-2 border-dashed border-primary/30 rounded-xl flex items-center justify-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-all mb-3 group"
+                className="w-full h-32 border-2 border-dashed border-blue-300/50 rounded-lg flex items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-all mb-3 group/upload"
               >
                 <div className="text-center">
-                  <div className="w-12 h-12 mx-auto mb-2 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-12 h-12 mx-auto mb-2 rounded-lg bg-gradient-to-br from-blue-400/20 to-purple-400/20 flex items-center justify-center group-hover/upload:scale-110 transition-transform">
+                    <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   </div>
                   <p className="text-text-muted text-xs font-medium">点击上传背景图</p>
-                  <p className="text-text-light text-[10px] mt-0.5">建议 1920×1080，≤5MB</p>
+                  <p className="text-text-light text-[9px] mt-0.5">最多9张，每张≤5MB</p>
                 </div>
               </div>
-            )}
-            <input ref={bgFileInputRef} type="file" accept="image/*" onChange={handleBgUpload} className="hidden" />
-            <p className="text-text-light text-[10px] text-center">
-              {customBgUrl ? '✅ 正在使用自定义背景' : '选择主题或上传自定义背景'}
-            </p>
+              <input ref={bgFileInputRef} type="file" accept="image/*" onChange={handleBgUpload} className="hidden" />
+
+              {/* Background images grid */}
+              {customBgUrls.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-[10px] text-text-muted font-medium">已上传 {customBgUrls.length} 张</p>
+                  <div className="grid grid-cols-3 gap-3 max-h-64 overflow-y-auto">
+                    {customBgUrls.map((url, index) => (
+                      <div key={index} className="relative group/bg aspect-video rounded-lg overflow-hidden border-2 border-transparent hover:border-blue-400 transition-all shadow-sm hover:shadow-md">
+                        <img src={url} alt={`背景 ${index + 1}`} className="w-full h-full object-cover" />
+                        
+                        {/* Selection indicator */}
+                        {!isRotating && selectedBgIndex === index && (
+                          <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
+                            <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center shadow-lg">
+                              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Action buttons */}
+                        <div className="absolute inset-0 bg-black/0 group-hover/bg:bg-black/20 transition-all flex items-center justify-center gap-1.5 opacity-0 group-hover/bg:opacity-100">
+                          {!isRotating && selectedBgIndex !== index && (
+                            <button
+                              onClick={() => setSelectedBgIndex(index)}
+                              className="px-2 py-1 bg-white/90 backdrop-blur-sm rounded text-[9px] font-medium hover:bg-white transition-all shadow-sm"
+                            >
+                              使用
+                            </button>
+                          )}
+                          <button
+                            onClick={() => removeCustomBg(index)}
+                            className="px-2 py-1 bg-red-500/80 backdrop-blur-sm text-white rounded text-[9px] font-medium hover:bg-red-500 transition-all shadow-sm"
+                          >
+                            删除
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-text-light text-[9px] text-center">
+                    {isRotating ? '🎬 正在轮换播放' : `✅ 当前使用第 ${selectedBgIndex !== null ? selectedBgIndex + 1 : 1} 张`}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Profile Info - full width */}
-        <form onSubmit={handleSave} className="card mb-5">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white text-base">
-              ✏️
-            </div>
-            <div>
-              <h3 className="text-base font-display font-bold text-text-main">个人信息</h3>
-              <p className="text-text-light text-xs">设置你们的空间信息</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="form-section mb-0">
-              <label className="form-label"><span className="mr-1">🏷️</span> 昵称</label>
-              <input
-                type="text" value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="input-field" placeholder="你的昵称"
-              />
-              <p className="form-hint">显示在主页的名字</p>
-            </div>
-            <div className="form-section mb-0">
-              <label className="form-label"><span className="mr-1">💕</span> 空间名称</label>
-              <input
-                type="text" value={coupleName}
-                onChange={(e) => setCoupleName(e.target.value)}
-                className="input-field" placeholder="我们的小窝"
-              />
-              <p className="form-hint">专属名称</p>
-            </div>
-            <div className="form-section mb-0">
-              <label className="form-label"><span className="mr-1">📅</span> 纪念日</label>
-              <input
-                type="date" value={anniversaryDate}
-                onChange={(e) => setAnniversaryDate(e.target.value)}
-                className="input-field"
-              />
-              <p className="form-hint">特别的日期</p>
+        <form onSubmit={handleSave} className="card group hover:shadow-lg transition-all duration-300 bg-white/40 backdrop-blur-md border border-white/60">
+          <div className="p-4 border-b border-gray-100/50">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm shadow-sm">
+                ✏️
+              </div>
+              <div>
+                <h3 className="text-sm font-display font-bold text-text-main">个人信息</h3>
+                <p className="text-text-light text-[10px] mt-0.5">设置你们的空间信息</p>
+              </div>
             </div>
           </div>
-
-          {message && (
-            <div className={`mt-4 p-4 rounded-xl text-sm font-medium flex items-center gap-2 ${
-              message.includes('成功') ? 'bg-green-50 text-green-600 border border-green-200' : 'bg-red-50 text-red-600 border border-red-200'
-            }`}>
-              <span>{message.includes('成功') ? '✅' : '❌'}</span> {message}
+          <div className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="form-section mb-0">
+                <label className="form-label"><span className="mr-1">🏷️</span> 昵称</label>
+                <input
+                  type="text" value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className="input-field" placeholder="你的昵称"
+                />
+              </div>
+              <div className="form-section mb-0">
+                <label className="form-label"><span className="mr-1"></span> 空间名称</label>
+                <input
+                  type="text" value={coupleName}
+                  onChange={(e) => setCoupleName(e.target.value)}
+                  className="input-field" placeholder="我们的小窝"
+                />
+              </div>
+              <div className="form-section mb-0">
+                <label className="form-label"><span className="mr-1"></span> 纪念日</label>
+                <input
+                  type="date" value={anniversaryDate}
+                  onChange={(e) => setAnniversaryDate(e.target.value)}
+                  className="input-field"
+                />
+              </div>
             </div>
-          )}
 
-          <div className="mt-5">
-            <button type="submit" disabled={saving} className="btn-primary w-full md:w-auto md:min-w-[200px] py-3">
-              {saving ? (
-                <span className="flex items-center justify-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  保存中...
-                </span>
-              ) : '💾 保存设置'}
-            </button>
+            {message && (
+              <div className={`mt-3 p-3 rounded-lg text-sm font-medium flex items-center gap-2 ${
+                message.includes('成功') ? 'bg-green-50 text-green-600 border border-green-200' : 'bg-red-50 text-red-600 border border-red-200'
+              }`}>
+                <span>{message.includes('成功') ? '✅' : ''}</span> {message}
+              </div>
+            )}
+
+            <div className="mt-3">
+              <button type="submit" disabled={saving} className="btn-primary w-full md:w-auto md:min-w-[200px] py-2.5">
+                {saving ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    保存中...
+                  </span>
+                ) : '💾 保存设置'}
+              </button>
+            </div>
           </div>
         </form>
 
         {/* Account */}
-        <div className="card">
-          <div className="flex flex-col sm:flex-row items-center gap-4">
-            <div className="flex items-center gap-3 flex-1">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-400 to-orange-400 flex items-center justify-center text-white text-base">
-                🔐
+        <div className="card group hover:shadow-lg transition-all duration-300 bg-white/40 backdrop-blur-md border border-white/60">
+          <div className="p-4 flex flex-col sm:flex-row items-center gap-3">
+            <div className="flex items-center gap-2.5 flex-1">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-400 to-orange-400 flex items-center justify-center text-white text-sm shadow-sm">
+                
               </div>
               <div>
-                <h3 className="text-base font-display font-bold text-text-main">账户</h3>
-                <p className="text-text-light text-xs">管理登录状态</p>
+                <h3 className="text-sm font-display font-bold text-text-main">账户</h3>
+                <p className="text-text-light text-[10px] mt-0.5">管理登录状态</p>
               </div>
             </div>
-            <button onClick={handleLogout} className="btn-danger w-full sm:w-auto">
-              🚪 退出登录
+            <button onClick={handleLogout} className="btn-danger w-full sm:w-auto px-6 py-2.5">
+               退出登录
             </button>
           </div>
         </div>
