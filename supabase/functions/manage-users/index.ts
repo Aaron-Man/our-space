@@ -124,16 +124,17 @@ serve(async (req) => {
           throw new Error('User ID is required')
         }
         
-        const updates: any = {}
-        if (email) updates.email = email
-        if (password) updates.password = password
+        // Update profile display_name
+        if (displayName !== undefined) {
+          const { error: profileError } = await supabaseAdmin
+            .from('profiles')
+            .update({ display_name: displayName })
+            .eq('id', userId)
+          
+          if (profileError) throw profileError
+        }
         
-        const { data: updatedUser, error: updateError } = 
-          await supabaseAdmin.auth.admin.updateUserById(userId, updates)
-        
-        if (updateError) throw updateError
-        
-        result = { user: updatedUser.user, message: 'User updated successfully' }
+        result = { message: 'User updated successfully' }
         break
 
       default:

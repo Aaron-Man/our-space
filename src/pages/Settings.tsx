@@ -21,6 +21,8 @@ export default function SettingsPage() {
   const [showUserManager, setShowUserManager] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
   const [showAddUserForm, setShowAddUserForm] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editingDisplayName, setEditingDisplayName] = useState('');
   const [newUserDisplayName, setNewUserDisplayName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
@@ -220,6 +222,47 @@ export default function SettingsPage() {
       alert('用户已删除');
     } catch (err: any) {
       alert(`删除用户失败: ${err.message}\n\n提示：只有管理员可以删除用户`);
+    } finally {
+      setUserLoading(false);
+    }
+  };
+
+  const handleEditUser = (user: any) => {
+    setEditingUserId(user.id);
+    setEditingDisplayName(user.display_name || '');
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUserId || !editingDisplayName.trim()) return;
+    
+    setUserLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: 'update',
+          userId: editingUserId,
+          displayName: editingDisplayName.trim(),
+        }),
+      });
+
+      const result = await response.json();
+      if (result.error) throw new Error(result.error);
+      
+      setEditingUserId(null);
+      setEditingDisplayName('');
+      fetchUsers();
+      alert('用户信息更新成功！');
+    } catch (err: any) {
+      alert(`更新用户失败: ${err.message}\n\n提示：只有管理员可以更新用户`);
     } finally {
       setUserLoading(false);
     }
@@ -651,41 +694,92 @@ export default function SettingsPage() {
                         })
                       : '未知';
                     
+                    const isEditing = editingUserId === user.id;
+                    
                     return (
                       <div key={user.id} className="flex items-center justify-between p-3 bg-white/30 rounded-lg border border-white/50 hover:bg-white/50 transition-colors">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-start gap-3">
-                            <span className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white text-xs font-medium flex-shrink-0 mt-0.5">
-                              {idx + 1}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <p className="text-sm font-medium text-text-main truncate">
-                                  {user.display_name || user.email?.split('@')[0] || '未命名'}
-                                </p>
-                                {user.is_admin && (
-                                  <span className="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 text-[10px] rounded font-medium">
-                                    👑 管理员
-                                  </span>
-                                )}
+                          {isEditing ? (
+                            // Edit Form
+                            <form onSubmit={handleUpdateUser} className="space-y-2">
+                              <div>
+                                <label className="form-label text-[10px] mb-1">编辑用户名</label>
+                                <input
+                                  type="text"
+                                  value={editingDisplayName}
+                                  onChange={(e) => setEditingDisplayName(e.target.value)}
+                                  className="input-field text-sm"
+                                  placeholder="请输入用户名"
+                                  required
+                                  autoFocus
+                                />
                               </div>
-                              <p className="text-xs text-text-light truncate mb-1">{user.email}</p>
-                              <p className="text-[10px] text-text-muted flex items-center gap-1">
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                                {createdDate}
-                              </p>
+                              <div className="flex gap-2">
+                                <button
+                                  type="submit"
+                                  disabled={userLoading}
+                                  className="btn-primary flex-1 py-1.5 text-xs"
+                                >
+                                  {userLoading ? '保存中...' : '✅ 保存'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingUserId(null);
+                                    setEditingDisplayName('');
+                                  }}
+                                  className="btn-outline flex-1 py-1.5 text-xs"
+                                >
+                                  ❌ 取消
+                                </button>
+                              </div>
+                            </form>
+                          ) : (
+                            // User Display
+                            <div className="flex items-start gap-3">
+                              <span className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white text-xs font-medium flex-shrink-0 mt-0.5">
+                                {idx + 1}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <p className="text-sm font-medium text-text-main truncate">
+                                    {user.display_name || user.email?.split('@')[0] || '未命名'}
+                                  </p>
+                                  {user.is_admin && (
+                                    <span className="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 text-[10px] rounded font-medium">
+                                      👑 管理员
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-text-light truncate mb-1">{user.email}</p>
+                                <p className="text-[10px] text-text-muted flex items-center gap-1">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                  {createdDate}
+                                </p>
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </div>
-                        <button
-                          onClick={() => handleDeleteUser(user.id)}
-                          className="ml-3 px-3 py-1.5 bg-red-100 text-red-600 rounded-lg text-xs hover:bg-red-200 transition-colors flex-shrink-0"
-                          disabled={userLoading}
-                        >
-                          🗑️ 删除
-                        </button>
+                        {!isEditing && (
+                          <div className="flex gap-2 ml-3">
+                            <button
+                              onClick={() => handleEditUser(user)}
+                              className="px-3 py-1.5 bg-blue-100 text-blue-600 rounded-lg text-xs hover:bg-blue-200 transition-colors flex-shrink-0"
+                              disabled={userLoading}
+                            >
+                              ✏️ 编辑
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(user.id)}
+                              className="px-3 py-1.5 bg-red-100 text-red-600 rounded-lg text-xs hover:bg-red-200 transition-colors flex-shrink-0"
+                              disabled={userLoading}
+                            >
+                              🗑️ 删除
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
