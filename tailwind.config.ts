@@ -38,6 +38,7 @@ export default {
       fontFamily: {
         display: ['"Quicksand"', 'sans-serif'],
         body: ['"Nunito"', 'sans-serif'],
+        brand: ['"Noto Serif SC"', 'serif'],
       },
       boxShadow: {
         soft: '0 2px 15px rgba(122, 184, 160, 0.1)',

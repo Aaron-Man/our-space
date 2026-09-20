@@ -99,14 +99,14 @@ export default function TravelPage() {
 
   return (
     <div className="page-container">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="section-title mb-0">
             <span className="text-gradient">✈️ 旅行计划</span>
           </h1>
           <p className="text-text-light text-sm mt-1">规划我们的下一段旅程</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2">
+        <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center justify-center gap-2 w-full sm:w-auto">
           {showForm ? (
             <>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -239,7 +239,7 @@ export default function TravelPage() {
           <p className="text-text-muted font-medium">还没有旅行计划，规划下一段旅程吧！</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {travels.map((travel) => {
             const statusInfo = TRAVEL_STATUS_MAP[travel.status];
             const nextStatus = getNextStatus(travel.status);
@@ -278,7 +278,7 @@ export default function TravelPage() {
                   )}
                   <button
                     onClick={() => handleDelete(travel.id)}
-                    className="text-text-light hover:text-danger text-sm transition-colors ml-auto opacity-0 group-hover:opacity-100"
+                    className="text-text-light hover:text-danger text-sm transition-colors ml-auto sm:opacity-0 sm:group-hover:opacity-100"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

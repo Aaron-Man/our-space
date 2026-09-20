@@ -30,15 +30,28 @@ export default function GalleryPage() {
   // Category management state
   const [newCatName, setNewCatName] = useState('');
   const [newCatEmoji, setNewCatEmoji] = useState('📷');
+  const [catDragIdx, setCatDragIdx] = useState<number | null>(null);
+  const [catDragOverIdx, setCatDragOverIdx] = useState<number | null>(null);
+  const [photoDragIdx, setPhotoDragIdx] = useState<number | null>(null);
+  const [photoDragOverIdx, setPhotoDragOverIdx] = useState<number | null>(null);
 
   const fetchPhotos = async () => {
     try {
       const { data, error } = await supabase
         .from('photos')
         .select('*')
+        .order('sort_order', { ascending: true })
         .order('created_at', { ascending: false });
       if (data) {
         const photoList = data as Photo[];
+        // Auto-initialize sort_order if all are 0
+        if (photoList.length > 1 && photoList.every((p) => !p.sort_order)) {
+          const updates = photoList.map((p, i) =>
+            supabase.from('photos').update({ sort_order: i }).eq('id', p.id)
+          );
+          await Promise.all(updates);
+          photoList.forEach((p, i) => { p.sort_order = i; });
+        }
         setPhotos(photoList);
         const urls: Record<number, string> = {};
         for (const photo of photoList) {
@@ -58,7 +71,18 @@ export default function GalleryPage() {
         .from('photo_categories')
         .select('*')
         .order('sort_order');
-      if (data) setCategories(data as PhotoCategory[]);
+      if (data) {
+        const loadedCats = data as PhotoCategory[];
+        // Auto-initialize sort_order if all are 0
+        if (loadedCats.length > 1 && loadedCats.every((c) => !c.sort_order)) {
+          const updates = loadedCats.map((c, i) =>
+            supabase.from('photo_categories').update({ sort_order: i }).eq('id', c.id)
+          );
+          await Promise.all(updates);
+          loadedCats.forEach((c, i) => { c.sort_order = i; });
+        }
+        setCategories(loadedCats);
+      }
     } catch { /* ignore */ }
   };
 
@@ -94,6 +118,18 @@ export default function GalleryPage() {
     } catch { /* ignore */ }
   };
 
+  const handleMoveCategory = async (fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx || toIdx < 0 || toIdx >= categories.length) return;
+    const newCats = [...categories];
+    const [moved] = newCats.splice(fromIdx, 1);
+    newCats.splice(toIdx, 0, moved);
+    const updates = newCats.map((cat, i) =>
+      supabase.from('photo_categories').update({ sort_order: i }).eq('id', cat.id)
+    );
+    setCategories(newCats);
+    await Promise.all(updates);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -125,11 +161,13 @@ export default function GalleryPage() {
       if (uploadError) { setError(`上传失败: ${uploadError.message}`); return; }
 
       if (uploadData) {
+        const maxOrder = photos.length > 0 ? Math.max(...photos.map((p) => p.sort_order || 0)) : -1;
         const { error: insertError } = await supabase.from('photos').insert({
           user_id: user.id,
           image_url: path,
           caption: caption.trim() || null,
-          category: category || null,
+          category: category || (categories.length > 0 ? categories[0].name : null),
+          sort_order: maxOrder + 1,
         });
 
         if (insertError) { setError(`保存记录失败: ${insertError.message}`); return; }
@@ -153,6 +191,50 @@ export default function GalleryPage() {
     } catch { /* ignore */ }
   };
 
+  const handleChangePhotoCategory = async (photoId: number, newCategory: string) => {
+    try {
+      await supabase.from('photos').update({ category: newCategory }).eq('id', photoId);
+      setPhotos(photos.map((p) => p.id === photoId ? { ...p, category: newCategory } : p));
+      if (selectedPhoto?.id === photoId) {
+        setSelectedPhoto({ ...selectedPhoto, category: newCategory });
+      }
+    } catch { /* ignore */ }
+  };
+
+  const handleMovePhoto = async (fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx || toIdx < 0 || toIdx >= filteredPhotos.length) return;
+    const newFiltered = [...filteredPhotos];
+    const [moved] = newFiltered.splice(fromIdx, 1);
+    newFiltered.splice(toIdx, 0, moved);
+    const updates = newFiltered.map((p, i) =>
+      supabase.from('photos').update({ sort_order: i }).eq('id', p.id)
+    );
+    setPhotos(photos.map((p) => {
+      const updated = newFiltered.find((fp) => fp.id === p.id);
+      return updated || p;
+    }));
+    await Promise.all(updates);
+  };
+
+  const handleDownload = async (photo: Photo) => {
+    try {
+      const url = imageUrls[photo.id];
+      if (!url) return;
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = photo.caption || `photo_${photo.id}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('下载失败:', err);
+    }
+  };
+
   const filteredPhotos = selectedCategory
     ? photos.filter((p) => p.category === selectedCategory)
     : photos;
@@ -173,24 +255,24 @@ export default function GalleryPage() {
 
   return (
     <div className="page-container">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="section-title mb-0">
             <span className="text-gradient">📷 相册</span>
           </h1>
           <p className="text-text-light text-sm mt-1">珍藏我们的美好瞬间</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setShowCategoryManager(!showCategoryManager)}
-            className="btn-outline flex items-center gap-2 text-sm"
+            className="btn-outline flex items-center justify-center gap-2 text-sm flex-1 sm:flex-none"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
             管理分类
           </button>
-          <button onClick={() => setShowUpload(!showUpload)} className="btn-primary flex items-center gap-2">
+          <button onClick={() => setShowUpload(!showUpload)} className="btn-primary flex items-center justify-center gap-2 flex-1 sm:flex-none">
             {showUpload ? (
               <>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -219,7 +301,7 @@ export default function GalleryPage() {
             </div>
             <div className="flex-1">
               <h3 className="font-display font-bold text-text-main">分类管理</h3>
-              <p className="text-text-light text-xs">添加或删除相册分类</p>
+              <p className="text-text-light text-xs">拖拽分类调整顺序</p>
             </div>
             <button
               onClick={() => setShowCategoryManager(false)}
@@ -271,28 +353,53 @@ export default function GalleryPage() {
             </div>
           </div>
 
-          {/* Existing categories */}
+          {/* Existing categories - drag to reorder */}
           {categories.length === 0 ? (
             <div className="text-center py-6 bg-white/30 rounded-xl">
               <p className="text-text-muted text-sm">还没有分类，先添加一个吧！</p>
               <p className="text-text-light text-xs mt-1">比如：日常、美食、旅行、自拍...</p>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              {categories.map((cat) => (
+            <div className="space-y-1.5">
+              {categories.map((cat, idx) => (
                 <div
                   key={cat.id}
-                  className="group flex items-center gap-1.5 px-3 py-2 bg-white/50 border border-white/50 rounded-xl hover:bg-primary/5 transition-all"
+                  draggable
+                  onDragStart={() => setCatDragIdx(idx)}
+                  onDragOver={(e) => { e.preventDefault(); setCatDragOverIdx(idx); }}
+                  onDragEnd={() => {
+                    if (catDragIdx !== null && catDragOverIdx !== null && catDragIdx !== catDragOverIdx) {
+                      handleMoveCategory(catDragIdx, catDragOverIdx);
+                    }
+                    setCatDragIdx(null);
+                    setCatDragOverIdx(null);
+                  }}
+                  className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all duration-200 cursor-grab active:cursor-grabbing
+                    ${catDragIdx === idx ? 'opacity-40 scale-95 border-primary/30 bg-primary/5' : ''}
+                    ${catDragOverIdx === idx && catDragIdx !== idx ? 'border-primary/50 bg-primary/5 shadow-sm' : 'border-white/50 bg-white/50 hover:bg-white/70'}
+                  `}
                 >
-                  <span>{cat.emoji}</span>
-                  <span className="text-sm text-text-main">{cat.name}</span>
-                  <span className="text-text-light text-xs">({categoryCounts[cat.name] || 0})</span>
+                  <div className="text-text-light/50 group-hover:text-text-light transition-colors flex-shrink-0">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+                      <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                      <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+                    </svg>
+                  </div>
+                  <span className="w-5 h-5 flex items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium flex-shrink-0">
+                    {idx + 1}
+                  </span>
+                  <span className="text-base flex-shrink-0">{cat.emoji}</span>
+                  <span className="text-sm text-text-main flex-1">{cat.name}</span>
+                  <span className="text-text-light text-xs">{categoryCounts[cat.name] || 0} 张</span>
                   <button
                     onClick={() => handleDeleteCategory(cat.id)}
-                    className="ml-1 text-text-light hover:text-danger text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="w-6 h-6 flex items-center justify-center text-text-light hover:text-danger opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
                     title="删除分类"
                   >
-                    ×
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
                   </button>
                 </div>
               ))}
@@ -370,7 +477,7 @@ export default function GalleryPage() {
           </div>
 
           <div className="form-section">
-            <label className="form-label">🏷️ 选择分类</label>
+            <label className="form-label">🏷️ 选择分类 {category && <span className="text-primary font-normal">（已选：{category}）</span>}</label>
             {categories.length === 0 ? (
               <p className="text-text-light text-sm">
                 还没有分类，
@@ -398,6 +505,7 @@ export default function GalleryPage() {
                     {c.emoji} {c.name}
                   </button>
                 ))}
+                <p className="text-text-light text-xs w-full mt-1">未选择分类的照片将归入第一个分类</p>
               </div>
             )}
           </div>
@@ -425,10 +533,10 @@ export default function GalleryPage() {
 
       {/* Category Filter */}
       {photos.length > 0 && categories.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-6">
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 -mx-1 px-1">
           <button
             onClick={() => setSelectedCategory('')}
-            className={`px-4 py-2 rounded-full text-sm transition-all duration-300 ${
+            className={`px-4 py-2 rounded-full text-sm transition-all duration-300 whitespace-nowrap flex-shrink-0 ${
               !selectedCategory
                 ? 'bg-gradient-to-r from-primary to-primary-dark text-white shadow-sm'
                 : 'bg-white/50 text-text-muted hover:bg-primary/10 hover:text-primary-dark border border-white/50'
@@ -444,7 +552,7 @@ export default function GalleryPage() {
               <button
                 key={c.id}
                 onClick={() => setSelectedCategory(c.name)}
-                className={`px-4 py-2 rounded-full text-sm transition-all duration-300 ${
+                className={`px-4 py-2 rounded-full text-sm transition-all duration-300 whitespace-nowrap flex-shrink-0 ${
                   selectedCategory === c.name
                     ? 'bg-gradient-to-r from-primary to-primary-dark text-white shadow-sm'
                     : 'bg-white/50 text-text-muted hover:bg-primary/10 hover:text-primary-dark border border-white/50'
@@ -474,11 +582,24 @@ export default function GalleryPage() {
           </p>
         </div>
       ) : (
-        <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
-          {filteredPhotos.map((photo) => (
+        <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-4 space-y-4">
+          {filteredPhotos.map((photo, idx) => (
             <div
               key={photo.id}
-              className="relative group cursor-pointer break-inside-avoid animate-fade-in"
+              draggable
+              onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.effectAllowed = 'move'; setPhotoDragIdx(idx); }}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setPhotoDragOverIdx(idx); }}
+              onDragEnd={() => {
+                if (photoDragIdx !== null && photoDragOverIdx !== null && photoDragIdx !== photoDragOverIdx) {
+                  handleMovePhoto(photoDragIdx, photoDragOverIdx);
+                }
+                setPhotoDragIdx(null);
+                setPhotoDragOverIdx(null);
+              }}
+              className={`relative group cursor-grab active:cursor-grabbing break-inside-avoid animate-fade-in transition-all duration-200
+                ${photoDragIdx === idx ? 'opacity-40 scale-95' : ''}
+                ${photoDragOverIdx === idx && photoDragIdx !== idx ? 'ring-2 ring-primary/50 ring-offset-2' : ''}
+              `}
               onClick={() => setSelectedPhoto(photo)}
             >
               <div className="relative overflow-hidden rounded-2xl shadow-soft group-hover:shadow-medium transition-all duration-300">
@@ -522,48 +643,76 @@ export default function GalleryPage() {
       {selectedPhoto && imageUrls[selectedPhoto.id] && (
         <div className="modal-overlay" onClick={() => setSelectedPhoto(null)}>
           <div className="modal-backdrop" />
-          <div className="relative max-w-4xl w-full animate-bounce-in" onClick={(e) => e.stopPropagation()}>
+          <div className="relative max-w-4xl w-full mx-4 animate-bounce-in" onClick={(e) => e.stopPropagation()}>
             <div className="bg-black/80 backdrop-blur-xl rounded-3xl overflow-hidden shadow-2xl">
               <img
                 src={imageUrls[selectedPhoto.id]}
                 alt={selectedPhoto.caption || ''}
                 className="w-full max-h-[75vh] object-contain"
               />
-              <div className="p-5 flex items-center justify-between">
-                <div>
-                  {selectedPhoto.caption && (
-                    <p className="text-white font-medium">{selectedPhoto.caption}</p>
-                  )}
-                  <div className="flex items-center gap-3 mt-1">
-                    <p className="text-white/50 text-sm">
-                      {new Date(selectedPhoto.created_at).toLocaleDateString('zh-CN', {
-                        year: 'numeric', month: 'long', day: 'numeric',
-                      })}
-                    </p>
-                    {selectedPhoto.category && (
-                      <span className="px-2 py-0.5 bg-white/10 rounded-full text-white/70 text-xs">
-                        {getEmojiForCategory(selectedPhoto.category)} {selectedPhoto.category}
-                      </span>
+              <div className="p-4 sm:p-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    {selectedPhoto.caption && (
+                      <p className="text-white font-medium">{selectedPhoto.caption}</p>
                     )}
+                    <div className="flex items-center gap-3 mt-1">
+                      <p className="text-white/50 text-sm">
+                        {new Date(selectedPhoto.created_at).toLocaleDateString('zh-CN', {
+                          year: 'numeric', month: 'long', day: 'numeric',
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => handleDownload(selectedPhoto)}
+                      className="px-3 py-2 bg-white/10 text-white rounded-xl text-sm hover:bg-white/20 transition-colors flex items-center gap-1.5"
+                      title="下载照片"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      下载
+                    </button>
+                    <button
+                      onClick={() => { handleDelete(selectedPhoto.id); setSelectedPhoto(null); }}
+                      className="px-3 py-2 bg-red-500/80 text-white rounded-xl text-sm hover:bg-red-500 transition-colors flex items-center gap-1.5"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      删除
+                    </button>
+                    <button
+                      onClick={() => setSelectedPhoto(null)}
+                      className="px-3 py-2 bg-white/10 text-white rounded-xl text-sm hover:bg-white/20 transition-colors"
+                    >
+                      关闭
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => { handleDelete(selectedPhoto.id); setSelectedPhoto(null); }}
-                    className="px-4 py-2 bg-red-500/80 text-white rounded-xl text-sm hover:bg-red-500 transition-colors flex items-center gap-1"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                    删除
-                  </button>
-                  <button
-                    onClick={() => setSelectedPhoto(null)}
-                    className="px-4 py-2 bg-white/10 text-white rounded-xl text-sm hover:bg-white/20 transition-colors"
-                  >
-                    关闭
-                  </button>
-                </div>
+                {/* Category editor */}
+                {categories.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-white/10">
+                    <p className="text-white/50 text-xs mb-2">🏷️ 修改分类</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {categories.map((c) => (
+                        <button
+                          key={c.id}
+                          onClick={() => handleChangePhotoCategory(selectedPhoto.id, c.name)}
+                          className={`px-2.5 py-1 rounded-full text-xs transition-all ${
+                            selectedPhoto.category === c.name
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white/10 text-white/70 hover:bg-white/20'
+                          }`}
+                        >
+                          {c.emoji} {c.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

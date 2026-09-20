@@ -53,7 +53,15 @@ create table public.dishes (
   difficulty int default 1 check (difficulty between 1 and 5),
   image_url text,
   available boolean default true,
+  sort_order int default 0,
   created_at timestamptz default now()
+);
+
+-- 5.1 菜品-分类关联表（支持多分类）
+create table public.dish_categories (
+  dish_id int references public.dishes(id) on delete cascade not null,
+  category_id int references public.categories(id) on delete cascade not null,
+  primary key (dish_id, category_id)
 );
 
 -- 6. 点菜订单表
@@ -108,6 +116,7 @@ create table public.photos (
   image_url text not null,
   caption text,
   category text,
+  sort_order int default 0,
   taken_at timestamptz,
   created_at timestamptz default now()
 );
@@ -121,6 +130,7 @@ alter table public.statuses enable row level security;
 alter table public.journals enable row level security;
 alter table public.categories enable row level security;
 alter table public.dishes enable row level security;
+alter table public.dish_categories enable row level security;
 alter table public.orders enable row level security;
 alter table public.travels enable row level security;
 alter table public.memos enable row level security;
@@ -154,6 +164,11 @@ create policy "dishes select" on public.dishes for select using (true);
 create policy "dishes insert" on public.dishes for insert with check (true);
 create policy "dishes update" on public.dishes for update using (true);
 create policy "dishes delete" on public.dishes for delete using (true);
+
+-- dish_categories
+create policy "dish_categories select" on public.dish_categories for select using (true);
+create policy "dish_categories insert" on public.dish_categories for insert with check (true);
+create policy "dish_categories delete" on public.dish_categories for delete using (true);
 
 -- orders
 create policy "orders select" on public.orders for select using (true);

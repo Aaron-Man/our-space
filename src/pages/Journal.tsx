@@ -61,14 +61,14 @@ export default function JournalPage() {
 
   return (
     <div className="page-container">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="section-title mb-0">
             <span className="text-gradient">📖 日志</span>
           </h1>
           <p className="text-text-light text-sm mt-1">记录生活的点点滴滴</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="btn-accent flex items-center gap-2">
+        <button onClick={() => setShowForm(!showForm)} className="btn-accent flex items-center justify-center gap-2 w-full sm:w-auto">
           {showForm ? (
             <>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -167,7 +167,7 @@ export default function JournalPage() {
           <p className="text-text-muted font-medium">还没有日志，写下第一篇吧！</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {journals.map((j) => (
             <div key={j.id} className="card group animate-fade-in">
               <div className="flex items-start justify-between gap-4">
@@ -196,7 +196,7 @@ export default function JournalPage() {
                 </Link>
                 <button
                   onClick={() => handleDelete(j.id)}
-                  className="text-text-light hover:text-danger text-sm transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100"
+                  className="text-text-light hover:text-danger text-sm transition-colors flex-shrink-0 sm:opacity-0 sm:group-hover:opacity-100"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

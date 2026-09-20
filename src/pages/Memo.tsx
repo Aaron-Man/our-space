@@ -66,14 +66,14 @@ export default function MemoPage() {
 
   return (
     <div className="page-container">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="section-title mb-0">
             <span className="text-gradient">📝 备忘录</span>
           </h1>
           <p className="text-text-light text-sm mt-1">记录生活中的重要小事</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2">
+        <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center justify-center gap-2 w-full sm:w-auto">
           {showForm ? (
             <>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -158,7 +158,7 @@ export default function MemoPage() {
           <p className="text-text-muted font-medium">还没有备忘，记下重要的事吧！</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {memos.map((memo) => (
             <div
               key={memo.id}
@@ -175,7 +175,7 @@ export default function MemoPage() {
                 <p className="text-text-light text-xs">
                   {new Date(memo.created_at).toLocaleDateString('zh-CN')}
                 </p>
-                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-2 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => togglePin(memo)}
                     className="text-text-light hover:text-primary text-xs transition-colors px-2 py-1 rounded-lg hover:bg-white/50"

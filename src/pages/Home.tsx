@@ -1,26 +1,31 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import type { Status } from '../types';
-
-const greetings = [
-  '欢迎回到我们的小世界',
-  '今天也要开心哦',
-  '想吃什么？点一道吧',
-  '记录我们的每一天',
-  '生活因你而精彩',
-  '有你陪伴的日子最美好',
-  '一起创造更多回忆吧',
-];
+import { getRandomQuote, type Quote } from '../data/quotes';
 
 export default function Home() {
-  const [greeting, setGreeting] = useState('');
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [quoteIndex, setQuoteIndex] = useState<number>(-1);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [stats, setStats] = useState({ statuses: 0, journals: 0, orders: 0, memos: 0 });
   const [recentStatus, setRecentStatus] = useState<Status[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const refreshQuote = useCallback(() => {
+    setIsRefreshing(true);
+    setTimeout(() => {
+      const { quote: q, index } = getRandomQuote(quoteIndex);
+      setQuote(q);
+      setQuoteIndex(index);
+      setIsRefreshing(false);
+    }, 300);
+  }, [quoteIndex]);
+
   useEffect(() => {
-    setGreeting(greetings[Math.floor(Math.random() * greetings.length)]);
+    const { quote: q, index } = getRandomQuote();
+    setQuote(q);
+    setQuoteIndex(index);
     fetchData();
   }, []);
 
@@ -58,18 +63,41 @@ export default function Home() {
   return (
     <div className="page-container">
       {/* Hero */}
-      <section className="text-center py-16 md:py-24">
-        <h1 className="text-4xl md:text-6xl font-display font-bold text-gradient mb-6 animate-float">
-          OUR SPACE
+      <section className="text-center py-6 sm:py-10 md:py-14">
+        <div className="flex items-center justify-center gap-2 sm:gap-3 mb-2">
+          <div className="decorative-line" />
+          <span className="text-primary/60 text-xs sm:text-sm">✦</span>
+          <div className="decorative-line" />
+        </div>
+        <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-5xl brand-title mb-2 animate-float">
+          金晨晓院
         </h1>
-        <p className="text-xl md:text-2xl text-text-muted font-body mb-8 animate-fade-in">
-          {greeting}
+        <p className="text-xs sm:text-sm text-text-light font-brand tracking-[0.3em] mb-1">
+          JIN CHEN XIAO YUAN
         </p>
-        <div className="flex flex-wrap justify-center gap-4">
-          <Link to="/menu" className="btn-primary">
+        <div className="flex items-center justify-center gap-2 mb-4 sm:mb-5">
+          <div className="h-px w-6 bg-primary/20" />
+          <span className="text-accent/60 text-[10px]">◆</span>
+          <div className="h-px w-6 bg-accent/20" />
+        </div>
+        <div className="relative group cursor-pointer mb-5 sm:mb-6" onClick={refreshQuote} title="点击换一句">
+          <p className={`text-base sm:text-lg md:text-xl text-text-muted font-body mb-1 transition-opacity duration-300 ${isRefreshing ? 'opacity-0' : 'opacity-100'} animate-fade-in`}>
+            {quote?.text_cn || quote?.text}
+          </p>
+          {(quote?.author || quote?.origin) && (
+            <p className={`text-xs text-text-light transition-opacity duration-300 ${isRefreshing ? 'opacity-0' : 'opacity-100'}`}>
+              —— {quote?.author || quote?.origin}
+            </p>
+          )}
+          <span className="absolute -right-6 top-0 text-text-light/0 group-hover:text-text-light/50 transition-all text-sm" title="换一句">
+            ↻
+          </span>
+        </div>
+        <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-3 sm:gap-4">
+          <Link to="/menu" className="btn-primary text-center">
             🍳 今天吃什么
           </Link>
-          <Link to="/journal" className="btn-accent">
+          <Link to="/journal" className="btn-accent text-center">
             📖 写日志
           </Link>
         </div>

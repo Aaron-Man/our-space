@@ -27,9 +27,20 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8 animate-fade-in">
-          <div className="text-6xl mb-4 animate-float">💕</div>
-          <h1 className="text-3xl font-display font-bold text-gradient mb-2">Our Space</h1>
-          <p className="text-text-muted">属于我们的温馨小世界</p>
+          <div className="text-6xl mb-4 animate-float">🏡</div>
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <div className="h-px w-10 bg-primary/30" />
+            <span className="text-primary/50 text-xs">✦</span>
+            <div className="h-px w-10 bg-primary/30" />
+          </div>
+          <h1 className="text-3xl font-brand font-bold tracking-[0.15em] mb-1 brand-title">金晨晓院</h1>
+          <p className="text-[10px] text-text-light font-brand tracking-[0.3em] mb-2">JIN CHEN XIAO YUAN</p>
+          <div className="flex items-center justify-center gap-2">
+            <div className="h-px w-6 bg-accent/20" />
+            <span className="text-accent/50 text-[10px]">◆</span>
+            <div className="h-px w-6 bg-accent/20" />
+          </div>
+          <p className="text-text-muted mt-3">属于我们的温馨小世界</p>
         </div>
 
         <form onSubmit={handleLogin} className="card animate-slide-up">

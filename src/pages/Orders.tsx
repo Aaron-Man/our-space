@@ -64,10 +64,10 @@ export default function OrdersPage() {
       </div>
 
       {/* Status Filter */}
-      <div className="flex flex-wrap gap-2 mb-8">
+      <div className="flex gap-2 mb-8 overflow-x-auto pb-2 -mx-1 px-1">
         <button
           onClick={() => setFilter('')}
-          className={`px-4 py-2 rounded-full text-sm transition-all duration-300 ${
+          className={`px-4 py-2 rounded-full text-sm transition-all duration-300 whitespace-nowrap flex-shrink-0 ${
             !filter ? 'bg-gradient-to-r from-primary to-primary-dark text-white shadow-sm' : 'bg-white/50 text-text-muted hover:bg-primary/10 border border-white/50'
           }`}
         >
@@ -77,7 +77,7 @@ export default function OrdersPage() {
           <button
             key={key}
             onClick={() => setFilter(key)}
-            className={`px-4 py-2 rounded-full text-sm transition-all duration-300 ${
+            className={`px-4 py-2 rounded-full text-sm transition-all duration-300 whitespace-nowrap flex-shrink-0 ${
               filter === key ? 'bg-gradient-to-r from-primary to-primary-dark text-white shadow-sm' : 'bg-white/50 text-text-muted hover:bg-primary/10 border border-white/50'
             }`}
           >
@@ -107,7 +107,7 @@ export default function OrdersPage() {
             const nextStatus = getNextStatus(order.status);
             return (
               <div key={order.id} className="card animate-fade-in group">
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <h3 className="text-lg font-display font-semibold text-text-main">
@@ -127,7 +127,7 @@ export default function OrdersPage() {
                       {new Date(order.created_at).toLocaleString('zh-CN')}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2">
                     {nextStatus && (
                       <button
                         onClick={() => handleStatusChange(order.id, nextStatus)}
@@ -138,7 +138,7 @@ export default function OrdersPage() {
                     )}
                     <button
                       onClick={() => handleDelete(order.id)}
-                      className="text-text-light hover:text-danger text-sm transition-colors opacity-0 group-hover:opacity-100"
+                      className="text-text-light hover:text-danger text-sm transition-colors"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

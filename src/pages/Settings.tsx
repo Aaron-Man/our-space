@@ -135,7 +135,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Responsive centered layout */}
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         {/* Top row: Avatar + Anniversary side by side on desktop */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
           {/* Avatar Card - spans 2 cols on desktop */}

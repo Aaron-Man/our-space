@@ -18,19 +18,48 @@ export default function MenuPage() {
     name: '', description: '', category_id: 0, ingredients: '',
     difficulty: 1, image_url: '', available: true,
   });
+  const [editingDishId, setEditingDishId] = useState<number | null>(null);
   const [newCategory, setNewCategory] = useState('');
+  const [editingCatId, setEditingCatId] = useState<number | null>(null);
+  const [editCatName, setEditCatName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [_imageFile, setImageFile] = useState<File | null>(null);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [dragDishIdx, setDragDishIdx] = useState<number | null>(null);
+  const [dragOverDishIdx, setDragOverDishIdx] = useState<number | null>(null);
 
   const fetchData = async () => {
     try {
       const [dishRes, catRes] = await Promise.all([
-        supabase.from('dishes').select('*, category:categories(*)').order('created_at', { ascending: false }),
+        supabase.from('dishes').select('*, category:categories(*)').order('sort_order', { ascending: true }).order('created_at', { ascending: false }),
         supabase.from('categories').select('*').order('sort_order'),
       ]);
-      if (dishRes.data) setDishes(dishRes.data as Dish[]);
-      if (catRes.data) setCategories(catRes.data as Category[]);
+      if (dishRes.data) {
+        const loadedDishes = dishRes.data as Dish[];
+        // Auto-initialize sort_order if all are 0 (after migration)
+        if (loadedDishes.length > 1 && loadedDishes.every((d) => !d.sort_order)) {
+          const updates = loadedDishes.map((d, i) =>
+            supabase.from('dishes').update({ sort_order: i }).eq('id', d.id)
+          );
+          await Promise.all(updates);
+          loadedDishes.forEach((d, i) => { d.sort_order = i; });
+        }
+        setDishes(loadedDishes);
+      }
+      if (catRes.data) {
+        const loadedCats = catRes.data as Category[];
+        // Auto-initialize category sort_order if all are 0
+        if (loadedCats.length > 1 && loadedCats.every((c) => !c.sort_order)) {
+          const updates = loadedCats.map((c, i) =>
+            supabase.from('categories').update({ sort_order: i }).eq('id', c.id)
+          );
+          await Promise.all(updates);
+          loadedCats.forEach((c, i) => { c.sort_order = i; });
+        }
+        setCategories(loadedCats);
+      }
     } catch { /* ignore */ }
     finally { setLoading(false); }
   };
@@ -60,15 +89,33 @@ export default function MenuPage() {
 
   const handleAddCategory = async () => {
     if (!newCategory.trim()) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('categories')
       .insert({ name: newCategory.trim(), sort_order: categories.length })
       .select()
       .single();
+    if (error) {
+      console.error('添加分类失败:', error);
+      alert('添加分类失败: ' + error.message);
+      return;
+    }
     if (data) {
       setCategories([...categories, data as Category]);
       setNewCategory('');
     }
+  };
+
+  const handleMoveCategory = async (fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx || toIdx < 0 || toIdx >= categories.length) return;
+    const newCats = [...categories];
+    const [moved] = newCats.splice(fromIdx, 1);
+    newCats.splice(toIdx, 0, moved);
+    // Reassign sort_order based on new positions
+    const updates = newCats.map((cat, i) =>
+      supabase.from('categories').update({ sort_order: i }).eq('id', cat.id)
+    );
+    setCategories(newCats);
+    await Promise.all(updates);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -77,24 +124,60 @@ export default function MenuPage() {
     setSubmitting(true);
 
     try {
-      const { data } = await supabase.from('dishes').insert({
-        name: form.name.trim(),
-        description: form.description.trim() || null,
-        category_id: form.category_id,
-        ingredients: form.ingredients.trim() || null,
-        difficulty: form.difficulty,
-        image_url: form.image_url || null,
-        available: form.available,
-      }).select().single();
-
-      if (data) {
-        setDishes([data as Dish, ...dishes]);
-        setForm({ name: '', description: '', category_id: 0, ingredients: '', difficulty: 1, image_url: '', available: true });
-        setImageFile(null);
-        setShowForm(false);
+      if (editingDishId) {
+        const { data } = await supabase.from('dishes').update({
+          name: form.name.trim(),
+          description: form.description.trim() || null,
+          category_id: form.category_id,
+          ingredients: form.ingredients.trim() || null,
+          difficulty: form.difficulty,
+          image_url: form.image_url || null,
+          available: form.available,
+        }).eq('id', editingDishId).select('*, category:categories(*)').single();
+        if (data) {
+          setDishes(dishes.map((d) => d.id === editingDishId ? { ...d, ...data } as Dish : d));
+        }
+      } else {
+        const maxOrder = dishes.length > 0 ? Math.max(...dishes.map((d) => d.sort_order || 0)) : -1;
+        const { data } = await supabase.from('dishes').insert({
+          name: form.name.trim(),
+          description: form.description.trim() || null,
+          category_id: form.category_id,
+          ingredients: form.ingredients.trim() || null,
+          difficulty: form.difficulty,
+          image_url: form.image_url || null,
+          available: form.available,
+          sort_order: maxOrder + 1,
+        }).select('*, category:categories(*)').single();
+        if (data) {
+          setDishes([data as Dish, ...dishes]);
+        }
       }
+      resetForm();
     } catch { /* ignore */ }
     finally { setSubmitting(false); }
+  };
+
+  const resetForm = () => {
+    setForm({ name: '', description: '', category_id: 0, ingredients: '', difficulty: 1, image_url: '', available: true });
+    setEditingDishId(null);
+    setImageFile(null);
+    setShowForm(false);
+  };
+
+  const handleEditDish = (dish: Dish) => {
+    setForm({
+      name: dish.name,
+      description: dish.description || '',
+      category_id: dish.category_id || 0,
+      ingredients: dish.ingredients || '',
+      difficulty: dish.difficulty,
+      image_url: dish.image_url || '',
+      available: dish.available,
+    });
+    setEditingDishId(dish.id);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDeleteDish = async (id: number) => {
@@ -129,6 +212,18 @@ export default function MenuPage() {
     }
   };
 
+  const handleEditCategory = async (id: number) => {
+    if (!editCatName.trim()) return;
+    try {
+      const { data } = await supabase.from('categories').update({ name: editCatName.trim() }).eq('id', id).select().single();
+      if (data) {
+        setCategories(categories.map((c) => c.id === id ? { ...c, name: data.name } : c));
+      }
+    } catch { /* ignore */ }
+    setEditingCatId(null);
+    setEditCatName('');
+  };
+
   const handleDeleteCategory = async (id: number) => {
     if (!confirm('确定删除该分类？已有菜品的分类将变为未分类。')) return;
     try {
@@ -138,26 +233,45 @@ export default function MenuPage() {
     } catch { /* ignore */ }
   };
 
+  const handleMoveDish = async (fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx || toIdx < 0 || toIdx >= filteredDishes.length) return;
+    const newFiltered = [...filteredDishes];
+    const [moved] = newFiltered.splice(fromIdx, 1);
+    newFiltered.splice(toIdx, 0, moved);
+    // Update the main dishes array to match new order
+    const newDishes = [...dishes];
+    newFiltered.forEach((fd, i) => {
+      const idx = newDishes.findIndex((d) => d.id === fd.id);
+      if (idx !== -1) newDishes[idx] = fd;
+    });
+    // Reassign sort_order
+    const updates = newFiltered.map((d, i) =>
+      supabase.from('dishes').update({ sort_order: i }).eq('id', d.id)
+    );
+    setDishes(newDishes);
+    await Promise.all(updates);
+  };
+
   return (
     <div className="page-container">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="section-title mb-0">
             <span className="text-gradient">🍳 菜谱</span>
           </h1>
           <p className="text-text-light text-sm mt-1">今天吃什么？</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setShowCategoryManager(!showCategoryManager)}
-            className="btn-outline flex items-center gap-2 text-sm"
+            className="btn-outline flex items-center justify-center gap-2 text-sm flex-1 sm:flex-none"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
             管理分类
           </button>
-          <button onClick={() => setShowForm(!showForm)} className="btn-primary flex items-center gap-2">
+          <button onClick={() => { if (showForm && editingDishId) { resetForm(); } else { setShowForm(!showForm); } }} className="btn-primary flex items-center justify-center gap-2 flex-1 sm:flex-none">
             {showForm ? (
               <>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -186,7 +300,7 @@ export default function MenuPage() {
             </div>
             <div className="flex-1">
               <h3 className="font-display font-bold text-text-main">分类管理</h3>
-              <p className="text-text-light text-xs">添加或删除菜品分类</p>
+              <p className="text-text-light text-xs">拖拽分类调整顺序</p>
             </div>
             <button
               onClick={() => setShowCategoryManager(false)}
@@ -212,28 +326,106 @@ export default function MenuPage() {
             </button>
           </div>
 
-          {/* Existing categories */}
+          {/* Existing categories - drag to reorder */}
           {categories.length === 0 ? (
             <div className="text-center py-6 bg-white/30 rounded-xl">
               <p className="text-text-muted text-sm">还没有分类，先添加一个吧！</p>
               <p className="text-text-light text-xs mt-1">比如：家常菜、凉菜、汤类、主食...</p>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              {categories.map((cat) => (
+            <div className="space-y-1.5">
+              {categories.map((cat, idx) => (
                 <div
                   key={cat.id}
-                  className="group flex items-center gap-1 px-3 py-2 bg-white/50 border border-white/50 rounded-xl hover:bg-primary/5 transition-all"
+                  draggable
+                  onDragStart={() => setDragIdx(idx)}
+                  onDragOver={(e) => { e.preventDefault(); setDragOverIdx(idx); }}
+                  onDragEnd={() => {
+                    if (dragIdx !== null && dragOverIdx !== null && dragIdx !== dragOverIdx) {
+                      handleMoveCategory(dragIdx, dragOverIdx);
+                    }
+                    setDragIdx(null);
+                    setDragOverIdx(null);
+                  }}
+                  className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all duration-200 cursor-grab active:cursor-grabbing
+                    ${dragIdx === idx ? 'opacity-40 scale-95 border-primary/30 bg-primary/5' : ''}
+                    ${dragOverIdx === idx && dragIdx !== idx ? 'border-primary/50 bg-primary/5 shadow-sm' : 'border-white/50 bg-white/50 hover:bg-white/70'}
+                  `}
                 >
-                  <span className="text-sm text-text-main">{cat.name}</span>
-                  <span className="text-text-light text-xs">({dishes.filter((d) => d.category_id === cat.id).length})</span>
-                  <button
-                    onClick={() => handleDeleteCategory(cat.id)}
-                    className="ml-1 text-text-light hover:text-danger text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="删除分类"
-                  >
-                    ×
-                  </button>
+                  {/* Drag handle */}
+                  <div className="flex flex-col items-center text-text-light/50 group-hover:text-text-light transition-colors flex-shrink-0">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+                      <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                      <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+                    </svg>
+                  </div>
+                  {/* Category number */}
+                  <span className="w-5 h-5 flex items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium flex-shrink-0">
+                    {idx + 1}
+                  </span>
+                  {/* Category info / edit input */}
+                  {editingCatId === cat.id ? (
+                    <div className="flex-1 flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editCatName}
+                        onChange={(e) => setEditCatName(e.target.value)}
+                        className="input-field py-1 text-sm flex-1"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') { e.preventDefault(); handleEditCategory(cat.id); }
+                          if (e.key === 'Escape') { setEditingCatId(null); setEditCatName(''); }
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleEditCategory(cat.id); }}
+                        className="w-6 h-6 flex items-center justify-center rounded-lg text-primary hover:bg-primary/10 transition-colors flex-shrink-0"
+                        title="保存"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setEditingCatId(null); setEditCatName(''); }}
+                        className="w-6 h-6 flex items-center justify-center rounded-lg text-text-light hover:bg-text-light/10 transition-colors flex-shrink-0"
+                        title="取消"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-sm text-text-main flex-1">{cat.name}</span>
+                      <span className="text-text-light text-xs">{dishes.filter((d) => d.category_id === cat.id).length} 道菜</span>
+                      {/* Edit */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditingCatId(cat.id); setEditCatName(cat.name); }}
+                        className="w-6 h-6 flex items-center justify-center text-text-light hover:text-primary opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
+                        title="编辑分类"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      {/* Delete */}
+                      <button
+                        onClick={() => handleDeleteCategory(cat.id)}
+                        className="w-6 h-6 flex items-center justify-center text-text-light hover:text-danger opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
+                        title="删除分类"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -263,8 +455,8 @@ export default function MenuPage() {
               🍽️
             </div>
             <div>
-              <h3 className="font-display font-bold text-text-main">添加新菜品</h3>
-              <p className="text-text-light text-xs">丰富我们的菜谱</p>
+              <h3 className="font-display font-bold text-text-main">{editingDishId ? '编辑菜品' : '添加新菜品'}</h3>
+              <p className="text-text-light text-xs">{editingDishId ? '修改菜品信息' : '丰富我们的菜谱'}</p>
             </div>
           </div>
 
@@ -365,9 +557,9 @@ export default function MenuPage() {
               {submitting ? (
                 <span className="flex items-center justify-center gap-2">
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  添加中...
+                  {editingDishId ? '保存中...' : '添加中...'}
                 </span>
-              ) : '✨ 添加菜品'}
+              ) : editingDishId ? '✅ 保存修改' : '✨ 添加菜品'}
             </button>
 
           </form>
@@ -376,10 +568,10 @@ export default function MenuPage() {
 
       {/* Category Filter */}
       {categories.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-6">
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 -mx-1 px-1">
           <button
             onClick={() => setSelectedCategory(null)}
-            className={`px-4 py-2 rounded-full text-sm transition-all duration-300 ${
+            className={`px-4 py-2 rounded-full text-sm transition-all duration-300 whitespace-nowrap flex-shrink-0 ${
               !selectedCategory
                 ? 'bg-gradient-to-r from-primary to-primary-dark text-white shadow-sm'
                 : 'bg-white/50 text-text-muted hover:bg-primary/10 hover:text-primary-dark border border-white/50'
@@ -391,7 +583,7 @@ export default function MenuPage() {
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
-              className={`px-4 py-2 rounded-full text-sm transition-all duration-300 ${
+              className={`px-4 py-2 rounded-full text-sm transition-all duration-300 whitespace-nowrap flex-shrink-0 ${
                 selectedCategory === cat.id
                   ? 'bg-gradient-to-r from-primary to-primary-dark text-white shadow-sm'
                   : 'bg-white/50 text-text-muted hover:bg-primary/10 hover:text-primary-dark border border-white/50'
@@ -419,9 +611,25 @@ export default function MenuPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredDishes.map((dish) => (
-            <div key={dish.id} className="card group">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredDishes.map((dish, idx) => (
+            <div
+              key={dish.id}
+              draggable
+              onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDragDishIdx(idx); }}
+              onDragOver={(e) => { e.preventDefault(); setDragOverDishIdx(idx); }}
+              onDragEnd={() => {
+                if (dragDishIdx !== null && dragOverDishIdx !== null && dragDishIdx !== dragOverDishIdx) {
+                  handleMoveDish(dragDishIdx, dragOverDishIdx);
+                }
+                setDragDishIdx(null);
+                setDragOverDishIdx(null);
+              }}
+              className={`card group cursor-grab active:cursor-grabbing transition-all duration-200
+                ${dragDishIdx === idx ? 'opacity-40 scale-95 ring-2 ring-primary/30' : ''}
+                ${dragOverDishIdx === idx && dragDishIdx !== idx ? 'ring-2 ring-primary/50 shadow-medium' : ''}
+              `}
+            >
               {dish.image_url && (
                 <img
                   src={dish.image_url}
@@ -450,20 +658,46 @@ export default function MenuPage() {
                   )}
                 </div>
               </div>
-              <div className="flex gap-2 mt-4 pt-3 border-t border-gray-100/50">
-                {dish.available && (
-                  <button onClick={() => setOrderModal(dish)} className="btn-primary text-sm flex-1">
-                    点这道菜
-                  </button>
-                )}
-                <button
-                  onClick={() => handleDeleteDish(dish.id)}
-                  className="text-text-light hover:text-danger text-sm transition-colors opacity-0 group-hover:opacity-100"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              <div className="flex items-center justify-between gap-1 mt-4 pt-3 border-t border-gray-100/50">
+                {/* Drag handle */}
+                <div className="text-text-light/40 group-hover:text-text-light/70 transition-colors flex-shrink-0" title="拖拽排序">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+                    <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                    <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
                   </svg>
-                </button>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleEditDish(dish)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg text-text-light hover:text-blue-500 hover:bg-blue-50 transition-all"
+                    title="编辑"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                  {dish.available && (
+                    <button
+                      onClick={() => setOrderModal(dish)}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg text-text-light hover:text-primary hover:bg-primary/10 transition-all"
+                      title="点这道菜"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+                      </svg>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDeleteDish(dish.id)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg text-text-light hover:text-danger hover:bg-red-50 transition-all"
+                    title="删除"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           ))}

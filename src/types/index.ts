@@ -45,8 +45,10 @@ export interface Dish {
   difficulty: number;
   image_url: string | null;
   available: boolean;
+  sort_order: number;
   created_at: string;
   category?: Category;
+  categories?: Category[];
 }
 
 export interface Order {
@@ -89,6 +91,7 @@ export interface Photo {
   image_url: string;
   caption: string | null;
   category: string | null;
+  sort_order: number;
   taken_at: string | null;
   created_at: string;
 }
