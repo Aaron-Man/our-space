@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { supabase } from './supabase';
 
 export interface ThemeOption {
   id: string;
@@ -244,10 +245,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return localStorage.getItem('our-space-theme') || THEMES[0].id;
   });
 
-  const [customBgUrls, setCustomBgUrls] = useState<string[]>(() => {
-    const saved = localStorage.getItem('our-space-custom-bgs');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // Load custom backgrounds from Supabase instead of localStorage
+  const [customBgUrls, setCustomBgUrls] = useState<string[]>([]);
+  const [loadingCustomBgs, setLoadingCustomBgs] = useState(true);
 
   const [selectedBgIndex, setSelectedBgIndex] = useState<number | null>(() => {
     const saved = localStorage.getItem('our-space-selected-bg-index');
@@ -261,6 +261,31 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [currentRotationIndex, setCurrentRotationIndex] = useState(0);
 
   const currentTheme = THEMES.find((t) => t.id === themeId) || THEMES[0];
+
+  // Fetch custom backgrounds from Supabase on mount
+  useEffect(() => {
+    const fetchCustomBackgrounds = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('custom_backgrounds')
+          .select('data_url, sort_order')
+          .order('sort_order', { ascending: true });
+        
+        if (error) throw error;
+        
+        if (data) {
+          const urls = data.map(bg => bg.data_url);
+          setCustomBgUrls(urls);
+        }
+      } catch (err) {
+        console.error('Failed to fetch custom backgrounds:', err);
+      } finally {
+        setLoadingCustomBgs(false);
+      }
+    };
+
+    fetchCustomBackgrounds();
+  }, []);
 
   // Get the actual background URL to display
   const getDisplayBg = useCallback(() => {
@@ -309,6 +334,50 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('our-space-rotating-bg', isRotating.toString());
   }, [isRotating]);
 
+  // Save custom background to Supabase
+  const saveCustomBgToSupabase = async (dataUrl: string, sortOrder: number) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('custom_backgrounds')
+        .insert({
+          data_url: dataUrl,
+          sort_order: sortOrder,
+          created_by: user.id,
+        });
+
+      if (error) throw error;
+    } catch (err) {
+      console.error('Failed to save custom background:', err);
+    }
+  };
+
+  // Delete custom background from Supabase
+  const deleteCustomBgFromSupabase = async (index: number) => {
+    try {
+      const { data, error } = await supabase
+        .from('custom_backgrounds')
+        .select('id')
+        .order('sort_order', { ascending: true })
+        .eq('data_url', customBgUrls[index]);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('custom_backgrounds')
+          .delete()
+          .eq('id', data[0].id);
+
+        if (deleteError) throw deleteError;
+      }
+    } catch (err) {
+      console.error('Failed to delete custom background:', err);
+    }
+  };
+
   // Rotation interval
   useEffect(() => {
     if (!isRotating || customBgUrls.length <= 1) return;
@@ -328,16 +397,28 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setThemeId(id);
   };
 
-  const addCustomBg = (dataUrl: string) => {
+  const addCustomBg = async (dataUrl: string) => {
+    const newSortOrder = customBgUrls.length;
+    
+    // Save to Supabase first
+    await saveCustomBgToSupabase(dataUrl, newSortOrder);
+    
+    // Then update local state
     setCustomBgUrls((prev) => [...prev, dataUrl]);
+    
     // Auto-select the first uploaded image
     if (customBgUrls.length === 0) {
       setSelectedBgIndex(0);
     }
   };
 
-  const removeCustomBg = (index: number) => {
+  const removeCustomBg = async (index: number) => {
+    // Delete from Supabase first
+    await deleteCustomBgFromSupabase(index);
+    
+    // Then update local state
     setCustomBgUrls((prev) => prev.filter((_, i) => i !== index));
+    
     // Adjust selected index if needed
     if (selectedBgIndex !== null) {
       if (selectedBgIndex === index) {

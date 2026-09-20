@@ -123,6 +123,15 @@ create table public.photos (
   created_at timestamptz default now()
 );
 
+-- 11. 共享自定义背景表（所有用户共享）
+create table public.custom_backgrounds (
+  id bigserial primary key,
+  data_url text not null,
+  sort_order int default 0,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz default now()
+);
+
 -- ============================================
 -- RLS (Row Level Security) 策略
 -- ============================================
@@ -201,6 +210,12 @@ create policy "photo_categories select" on public.photo_categories for select us
 create policy "photo_categories insert" on public.photo_categories for insert with check (true);
 create policy "photo_categories update" on public.photo_categories for update using (true);
 create policy "photo_categories delete" on public.photo_categories for delete using (true);
+
+-- custom_backgrounds: 所有人可读，登录用户可写（共享背景）
+create policy "custom_backgrounds select" on public.custom_backgrounds for select using (true);
+create policy "custom_backgrounds insert" on public.custom_backgrounds for insert with check (auth.uid() is not null);
+create policy "custom_backgrounds update" on public.custom_backgrounds for update using (auth.uid() is not null);
+create policy "custom_backgrounds delete" on public.custom_backgrounds for delete using (auth.uid() is not null);
 
 -- ============================================
 -- Storage Bucket 配置
