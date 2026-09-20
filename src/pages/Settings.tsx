@@ -24,6 +24,7 @@ export default function SettingsPage() {
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
   const [userLoading, setUserLoading] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const extractStoragePath = (imageUrlOrPath: string): string => {
     if (imageUrlOrPath.startsWith('http')) {
@@ -45,6 +46,7 @@ export default function SettingsPage() {
       if (data) {
         const p = data as Profile;
         setProfile(p);
+        setIsAdmin(p.is_admin || false);  // 检查是否是管理员
         setDisplayName(p.display_name || '');
         setCoupleName(p.couple_name || '');
         setAnniversaryDate(p.anniversary_date || '');
@@ -540,32 +542,33 @@ export default function SettingsPage() {
           </div>
         </form>
 
-        {/* User Management */}
-        <div className="card group hover:shadow-lg transition-all duration-300 bg-white/40 backdrop-blur-md border border-white/60">
-          <div className="p-4 border-b border-gray-100/50">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-sm shadow-sm">
-                  👥
+        {/* User Management - Only visible to admins */}
+        {isAdmin && (
+          <div className="card group hover:shadow-lg transition-all duration-300 bg-white/40 backdrop-blur-md border border-white/60">
+            <div className="p-4 border-b border-gray-100/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-sm shadow-sm">
+                    👥
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-display font-bold text-text-main">用户管理</h3>
+                    <p className="text-text-light text-[10px] mt-0.5">管理系统中的用户</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-display font-bold text-text-main">用户管理</h3>
-                  <p className="text-text-light text-[10px] mt-0.5">管理系统中的用户</p>
-                </div>
+                <button
+                  onClick={() => {
+                    setShowUserManager(!showUserManager);
+                    if (!showUserManager) fetchUsers();
+                  }}
+                  className="btn-outline text-xs px-3 py-1.5"
+                >
+                  {showUserManager ? '收起' : '管理用户'}
+                </button>
               </div>
-              <button
-                onClick={() => {
-                  setShowUserManager(!showUserManager);
-                  if (!showUserManager) fetchUsers();
-                }}
-                className="btn-outline text-xs px-3 py-1.5"
-              >
-                {showUserManager ? '收起' : '管理用户'}
-              </button>
             </div>
-          </div>
 
-          {showUserManager && (
+            {showUserManager && (
             <div className="p-4">
               {/* Add User Button */}
               <div className="mb-4">
@@ -677,6 +680,7 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* Account */}
         <div className="card group hover:shadow-lg transition-all duration-300 bg-white/40 backdrop-blur-md border border-white/60">
