@@ -21,6 +21,7 @@ export default function SettingsPage() {
   const [showUserManager, setShowUserManager] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
   const [showAddUserForm, setShowAddUserForm] = useState(false);
+  const [newUserDisplayName, setNewUserDisplayName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
   const [userLoading, setUserLoading] = useState(false);
@@ -155,7 +156,7 @@ export default function SettingsPage() {
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserEmail.trim() || !newUserPassword.trim()) return;
+    if (!newUserDisplayName.trim() || !newUserEmail.trim() || !newUserPassword.trim()) return;
     
     setUserLoading(true);
     try {
@@ -170,6 +171,7 @@ export default function SettingsPage() {
         },
         body: JSON.stringify({
           action: 'create',
+          displayName: newUserDisplayName.trim(),
           email: newUserEmail.trim(),
           password: newUserPassword.trim(),
         }),
@@ -178,6 +180,7 @@ export default function SettingsPage() {
       const result = await response.json();
       if (result.error) throw new Error(result.error);
       
+      setNewUserDisplayName('');
       setNewUserEmail('');
       setNewUserPassword('');
       setShowAddUserForm(false);
@@ -585,6 +588,17 @@ export default function SettingsPage() {
                 <form onSubmit={handleAddUser} className="mb-4 p-4 bg-white/50 rounded-xl border border-white/50">
                   <h4 className="text-sm font-medium text-text-main mb-3">新用户信息</h4>
                   <div className="space-y-3">
+                    <div>
+                      <label className="form-label text-xs">用户名</label>
+                      <input
+                        type="text"
+                        value={newUserDisplayName}
+                        onChange={(e) => setNewUserDisplayName(e.target.value)}
+                        placeholder="请输入用户名"
+                        className="input-field text-sm"
+                        required
+                      />
+                    </div>
                     <div>
                       <label className="form-label text-xs">邮箱</label>
                       <input

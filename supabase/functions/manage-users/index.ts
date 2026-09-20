@@ -53,7 +53,7 @@ serve(async (req) => {
       throw new Error('Not an admin')
     }
 
-    const { action, email, password, userId } = await req.json()
+    const { action, email, password, userId, displayName } = await req.json()
 
     let result
 
@@ -96,11 +96,11 @@ serve(async (req) => {
         
         if (createError) throw createError
         
-        // Create profile for new user
+        // Create profile for new user with display_name
         if (newUser.user) {
           await supabaseAdmin.from('profiles').insert({
             id: newUser.user.id,
-            display_name: email.split('@')[0],
+            display_name: displayName || email.split('@')[0],
             is_admin: false,
           })
         }
