@@ -28,6 +28,7 @@ export default function SettingsPage() {
   const [newUserPassword, setNewUserPassword] = useState('');
   const [userLoading, setUserLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
 
   const extractStoragePath = (imageUrlOrPath: string): string => {
     if (imageUrlOrPath.startsWith('http')) {
@@ -260,7 +261,10 @@ export default function SettingsPage() {
       setEditingUserId(null);
       setEditingDisplayName('');
       fetchUsers();
-      alert('用户信息更新成功！');
+      
+      // Show success toast
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 2000);
     } catch (err: any) {
       alert(`更新用户失败: ${err.message}\n\n提示：只有管理员可以更新用户`);
     } finally {
@@ -808,6 +812,18 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Success Toast */}
+      {showSuccessToast && (
+        <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-50 animate-bounce-in">
+          <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+            <span className="font-medium">保存成功！</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
