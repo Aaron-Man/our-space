@@ -247,7 +247,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   // Load custom backgrounds from Supabase instead of localStorage
   const [customBgUrls, setCustomBgUrls] = useState<string[]>([]);
-  const [loadingCustomBgs, setLoadingCustomBgs] = useState(true);
 
   const [selectedBgIndex, setSelectedBgIndex] = useState<number | null>(() => {
     const saved = localStorage.getItem('our-space-selected-bg-index');
@@ -279,8 +278,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         }
       } catch (err) {
         console.error('Failed to fetch custom backgrounds:', err);
-      } finally {
-        setLoadingCustomBgs(false);
       }
     };
 
@@ -357,21 +354,20 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // Delete custom background from Supabase
   const deleteCustomBgFromSupabase = async (index: number) => {
     try {
-      // Use sort_order to find and delete the record
+      // Fetch all records and find the one at the specified index
       const { data, error } = await supabase
         .from('custom_backgrounds')
-        .select('id')
-        .order('sort_order', { ascending: true })
-        .limit(1)
-        .offset(index);
+        .select('id, sort_order')
+        .order('sort_order', { ascending: true });
 
       if (error) throw error;
 
-      if (data && data.length > 0) {
+      if (data && data.length > index) {
+        const targetId = data[index].id;
         const { error: deleteError } = await supabase
           .from('custom_backgrounds')
           .delete()
-          .eq('id', data[0].id);
+          .eq('id', targetId);
 
         if (deleteError) throw deleteError;
         

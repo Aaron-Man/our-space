@@ -110,12 +110,6 @@ export default function StatusPage() {
     } catch { /* ignore */ }
   };
 
-  // Get mood emoji from label
-  const getMoodEmoji = (moodLabel: string): string => {
-    const found = MOOD_OPTIONS.find(m => m.label === moodLabel);
-    return found ? found.emoji : '💭';
-  };
-
   return (
     <div className="page-container">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">

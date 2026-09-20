@@ -302,7 +302,7 @@ export default function MenuPage() {
     newFiltered.splice(toIdx, 0, moved);
     // Update the main dishes array to match new order
     const newDishes = [...dishes];
-    newFiltered.forEach((fd, i) => {
+    newFiltered.forEach((fd) => {
       const idx = newDishes.findIndex((d) => d.id === fd.id);
       if (idx !== -1) newDishes[idx] = fd;
     });
