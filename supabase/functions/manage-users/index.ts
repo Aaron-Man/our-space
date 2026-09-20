@@ -66,7 +66,7 @@ serve(async (req) => {
         const userIds = users.users.map(u => u.id)
         const { data: profiles } = await supabaseAdmin
           .from('profiles')
-          .select('id, display_name, email')
+          .select('id, display_name, email, is_admin, created_at')
           .in('id', userIds)
         
         const usersWithProfiles = users.users.map(user => {
@@ -74,6 +74,8 @@ serve(async (req) => {
           return {
             ...user,
             display_name: profile?.display_name || user.email?.split('@')[0] || '未命名',
+            is_admin: profile?.is_admin || false,
+            created_at: profile?.created_at || user.created_at,
           }
         })
         

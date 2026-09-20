@@ -624,30 +624,54 @@ export default function SettingsPage() {
                 </div>
               ) : (
                 <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {users.map((user, idx) => (
-                    <div key={user.id} className="flex items-center justify-between p-3 bg-white/30 rounded-lg border border-white/50 hover:bg-white/50 transition-colors">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white text-xs font-medium">
-                            {idx + 1}
-                          </span>
-                          <div>
-                            <p className="text-sm font-medium text-text-main truncate">
-                              {user.display_name || user.email?.split('@')[0] || '未命名'}
-                            </p>
-                            <p className="text-xs text-text-light truncate">{user.email}</p>
+                  {users.map((user, idx) => {
+                    // Format created date
+                    const createdDate = user.created_at 
+                      ? new Date(user.created_at).toLocaleDateString('zh-CN', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric'
+                        })
+                      : '未知';
+                    
+                    return (
+                      <div key={user.id} className="flex items-center justify-between p-3 bg-white/30 rounded-lg border border-white/50 hover:bg-white/50 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start gap-3">
+                            <span className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white text-xs font-medium flex-shrink-0 mt-0.5">
+                              {idx + 1}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="text-sm font-medium text-text-main truncate">
+                                  {user.display_name || user.email?.split('@')[0] || '未命名'}
+                                </p>
+                                {user.is_admin && (
+                                  <span className="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 text-[10px] rounded font-medium">
+                                    👑 管理员
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-text-light truncate mb-1">{user.email}</p>
+                              <p className="text-[10px] text-text-muted flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                {createdDate}
+                              </p>
+                            </div>
                           </div>
                         </div>
+                        <button
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="ml-3 px-3 py-1.5 bg-red-100 text-red-600 rounded-lg text-xs hover:bg-red-200 transition-colors flex-shrink-0"
+                          disabled={userLoading}
+                        >
+                          🗑️ 删除
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleDeleteUser(user.id)}
-                        className="ml-3 px-3 py-1.5 bg-red-100 text-red-600 rounded-lg text-xs hover:bg-red-200 transition-colors"
-                        disabled={userLoading}
-                      >
-                        🗑️ 删除
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
