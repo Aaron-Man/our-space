@@ -16,6 +16,14 @@ export default function SettingsPage() {
   const [avatarUrl, setAvatarUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bgFileInputRef = useRef<HTMLInputElement>(null);
+  
+  // User management states
+  const [showUserManager, setShowUserManager] = useState(false);
+  const [users, setUsers] = useState<any[]>([]);
+  const [showAddUserForm, setShowAddUserForm] = useState(false);
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [userLoading, setUserLoading] = useState(false);
 
   const extractStoragePath = (imageUrlOrPath: string): string => {
     if (imageUrlOrPath.startsWith('http')) {
@@ -113,6 +121,76 @@ export default function SettingsPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     window.location.reload();
+  };
+
+  // User management functions
+  const fetchUsers = async () => {
+    setUserLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('get_all_users');
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (err) {
+      console.error('Failed to fetch users:', err);
+      // Fallback: just show current user from profiles
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        setUsers(profileData ? [{ id: user.id, email: user.email, ...profileData }] : []);
+      }
+    } finally {
+      setUserLoading(false);
+    }
+  };
+
+  const handleAddUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUserEmail.trim() || !newUserPassword.trim()) return;
+    
+    setUserLoading(true);
+    try {
+      const { data, error } = await supabase.auth.admin.createUser({
+        email: newUserEmail.trim(),
+        password: newUserPassword.trim(),
+        email_confirm: true,
+      });
+      
+      if (error) throw error;
+      
+      // Create profile for new user
+      if (data.user) {
+        await supabase.from('profiles').insert({
+          id: data.user.id,
+          display_name: newUserEmail.split('@')[0],
+        });
+      }
+      
+      setNewUserEmail('');
+      setNewUserPassword('');
+      setShowAddUserForm(false);
+      fetchUsers();
+      alert('用户创建成功！');
+    } catch (err: any) {
+      alert(`创建用户失败: ${err.message}`);
+    } finally {
+      setUserLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm('确定删除此用户？此操作不可恢复。')) return;
+    
+    setUserLoading(true);
+    try {
+      const { error } = await supabase.auth.admin.deleteUser(userId);
+      if (error) throw error;
+      fetchUsers();
+      alert('用户已删除');
+    } catch (err: any) {
+      alert(`删除用户失败: ${err.message}`);
+    } finally {
+      setUserLoading(false);
+    }
   };
 
   const daysTogether = anniversaryDate
@@ -434,6 +512,120 @@ export default function SettingsPage() {
             </div>
           </div>
         </form>
+
+        {/* User Management */}
+        <div className="card group hover:shadow-lg transition-all duration-300 bg-white/40 backdrop-blur-md border border-white/60">
+          <div className="p-4 border-b border-gray-100/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-sm shadow-sm">
+                  👥
+                </div>
+                <div>
+                  <h3 className="text-sm font-display font-bold text-text-main">用户管理</h3>
+                  <p className="text-text-light text-[10px] mt-0.5">管理系统中的用户</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowUserManager(!showUserManager);
+                  if (!showUserManager) fetchUsers();
+                }}
+                className="btn-outline text-xs px-3 py-1.5"
+              >
+                {showUserManager ? '收起' : '管理用户'}
+              </button>
+            </div>
+          </div>
+
+          {showUserManager && (
+            <div className="p-4">
+              {/* Add User Button */}
+              <div className="mb-4">
+                <button
+                  onClick={() => setShowAddUserForm(!showAddUserForm)}
+                  className="btn-primary w-full py-2.5 text-sm"
+                >
+                  {showAddUserForm ? '取消添加' : '+ 添加新用户'}
+                </button>
+              </div>
+
+              {/* Add User Form */}
+              {showAddUserForm && (
+                <form onSubmit={handleAddUser} className="mb-4 p-4 bg-white/50 rounded-xl border border-white/50">
+                  <h4 className="text-sm font-medium text-text-main mb-3">新用户信息</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="form-label text-xs">邮箱</label>
+                      <input
+                        type="email"
+                        value={newUserEmail}
+                        onChange={(e) => setNewUserEmail(e.target.value)}
+                        placeholder="user@example.com"
+                        className="input-field text-sm"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label text-xs">密码</label>
+                      <input
+                        type="password"
+                        value={newUserPassword}
+                        onChange={(e) => setNewUserPassword(e.target.value)}
+                        placeholder="至少6位"
+                        className="input-field text-sm"
+                        required
+                        minLength={6}
+                      />
+                    </div>
+                    <button type="submit" disabled={userLoading} className="btn-primary w-full py-2">
+                      {userLoading ? '创建中...' : '✅ 创建用户'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Users List */}
+              {userLoading ? (
+                <div className="text-center py-6">
+                  <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-2" />
+                  <p className="text-text-muted text-xs">加载中...</p>
+                </div>
+              ) : users.length === 0 ? (
+                <div className="text-center py-6">
+                  <p className="text-text-muted text-sm">暂无用户</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {users.map((user, idx) => (
+                    <div key={user.id} className="flex items-center justify-between p-3 bg-white/30 rounded-lg border border-white/50 hover:bg-white/50 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white text-xs font-medium">
+                            {idx + 1}
+                          </span>
+                          <div>
+                            <p className="text-sm font-medium text-text-main truncate">
+                              {user.display_name || user.email?.split('@')[0] || '未命名'}
+                            </p>
+                            <p className="text-xs text-text-light truncate">{user.email}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteUser(user.id)}
+                        className="ml-3 px-3 py-1.5 bg-red-100 text-red-600 rounded-lg text-xs hover:bg-red-200 transition-colors"
+                        disabled={userLoading}
+                      >
+                        🗑️ 删除
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Account */}
         <div className="card group hover:shadow-lg transition-all duration-300 bg-white/40 backdrop-blur-md border border-white/60">
