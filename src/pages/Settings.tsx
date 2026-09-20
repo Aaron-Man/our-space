@@ -127,17 +127,25 @@ export default function SettingsPage() {
   const fetchUsers = async () => {
     setUserLoading(true);
     try {
-      const { data, error } = await supabase.rpc('get_all_users');
-      if (error) throw error;
-      setUsers(data || []);
-    } catch (err) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ action: 'list' }),
+      });
+
+      const result = await response.json();
+      if (result.error) throw new Error(result.error);
+      
+      setUsers(result.users || []);
+    } catch (err: any) {
       console.error('Failed to fetch users:', err);
-      // Fallback: just show current user from profiles
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        setUsers(profileData ? [{ id: user.id, email: user.email, ...profileData }] : []);
-      }
+      alert(`获取用户列表失败: ${err.message}\n\n提示：只有管理员可以查看用户列表`);
     } finally {
       setUserLoading(false);
     }
@@ -149,21 +157,24 @@ export default function SettingsPage() {
     
     setUserLoading(true);
     try {
-      const { data, error } = await supabase.auth.admin.createUser({
-        email: newUserEmail.trim(),
-        password: newUserPassword.trim(),
-        email_confirm: true,
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: 'create',
+          email: newUserEmail.trim(),
+          password: newUserPassword.trim(),
+        }),
       });
-      
-      if (error) throw error;
-      
-      // Create profile for new user
-      if (data.user) {
-        await supabase.from('profiles').insert({
-          id: data.user.id,
-          display_name: newUserEmail.split('@')[0],
-        });
-      }
+
+      const result = await response.json();
+      if (result.error) throw new Error(result.error);
       
       setNewUserEmail('');
       setNewUserPassword('');
@@ -171,7 +182,7 @@ export default function SettingsPage() {
       fetchUsers();
       alert('用户创建成功！');
     } catch (err: any) {
-      alert(`创建用户失败: ${err.message}`);
+      alert(`创建用户失败: ${err.message}\n\n提示：只有管理员可以创建用户`);
     } finally {
       setUserLoading(false);
     }
@@ -182,12 +193,28 @@ export default function SettingsPage() {
     
     setUserLoading(true);
     try {
-      const { error } = await supabase.auth.admin.deleteUser(userId);
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: 'delete',
+          userId: userId,
+        }),
+      });
+
+      const result = await response.json();
+      if (result.error) throw new Error(result.error);
+      
       fetchUsers();
       alert('用户已删除');
     } catch (err: any) {
-      alert(`删除用户失败: ${err.message}`);
+      alert(`删除用户失败: ${err.message}\n\n提示：只有管理员可以删除用户`);
     } finally {
       setUserLoading(false);
     }

@@ -10,6 +10,7 @@ create table public.profiles (
   avatar_url text,
   couple_name text,
   anniversary_date date,
+  is_admin boolean default false,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
