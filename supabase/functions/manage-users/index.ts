@@ -1,5 +1,6 @@
 // supabase/functions/manage-users/index.ts
 // Edge Function for secure user management
+// Last updated: 2026-09-20 - Added display_name optimization
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
