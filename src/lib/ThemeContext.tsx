@@ -357,11 +357,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // Delete custom background from Supabase
   const deleteCustomBgFromSupabase = async (index: number) => {
     try {
+      // Use sort_order to find and delete the record
       const { data, error } = await supabase
         .from('custom_backgrounds')
         .select('id')
         .order('sort_order', { ascending: true })
-        .eq('data_url', customBgUrls[index]);
+        .limit(1)
+        .offset(index);
 
       if (error) throw error;
 
@@ -372,6 +374,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           .eq('id', data[0].id);
 
         if (deleteError) throw deleteError;
+        
+        console.log('Deleted custom background successfully');
       }
     } catch (err) {
       console.error('Failed to delete custom background:', err);
@@ -427,6 +431,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         setSelectedBgIndex(selectedBgIndex - 1);
       }
     }
+    
+    console.log('Removed custom background at index:', index);
   };
 
   return (
