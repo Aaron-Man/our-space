@@ -242,6 +242,11 @@ export default function SettingsPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
+      console.log('Updating user:', {
+        userId: editingUserId,
+        displayName: editingDisplayName.trim()
+      });
+
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-users`, {
         method: 'POST',
         headers: {
@@ -256,16 +261,19 @@ export default function SettingsPage() {
       });
 
       const result = await response.json();
+      console.log('Update result:', result);
+      
       if (result.error) throw new Error(result.error);
       
       setEditingUserId(null);
       setEditingDisplayName('');
-      fetchUsers();
+      await fetchUsers(); // Wait for users to refresh
       
       // Show success toast
       setShowSuccessToast(true);
       setTimeout(() => setShowSuccessToast(false), 2000);
     } catch (err: any) {
+      console.error('Update error:', err);
       alert(`更新用户失败: ${err.message}\n\n提示：只有管理员可以更新用户`);
     } finally {
       setUserLoading(false);

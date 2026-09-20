@@ -125,14 +125,24 @@ serve(async (req) => {
           throw new Error('User ID is required')
         }
         
+        console.log('Update user request:', { userId, displayName })
+        
         // Update profile display_name
-        if (displayName !== undefined) {
-          const { error: profileError } = await supabaseAdmin
+        if (displayName !== undefined && displayName.trim()) {
+          const { data: updatedProfile, error: profileError } = await supabaseAdmin
             .from('profiles')
-            .update({ display_name: displayName })
+            .update({ display_name: displayName.trim() })
             .eq('id', userId)
+            .select()
           
-          if (profileError) throw profileError
+          if (profileError) {
+            console.error('Profile update error:', profileError)
+            throw profileError
+          }
+          
+          console.log('Profile updated successfully:', updatedProfile)
+        } else {
+          console.log('No display_name provided or empty')
         }
         
         result = { message: 'User updated successfully' }
